@@ -5,7 +5,7 @@ import json
 import requests
 import streamlit as st
 
-from src.verityai.assessment import assess_facts, find_numeric_discrepancies, split_claim_into_facts
+from src.verityai.assessment import assess_facts, find_numeric_discrepancies, split_claim_into_facts  # claim-analysis helpers
 from src.verityai.classifier import classify_article, load_classifier
 from src.verityai.live_search import search_live_news
 from src.verityai.retrieval import EvidenceRetriever, load_evidence
