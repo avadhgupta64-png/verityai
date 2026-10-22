@@ -1,38 +1,44 @@
 # VerityAI
+
 ### Evidence Before Belief
 
-VerityAI is an experimental research prototype for exploring news-article patterns and discovering material relevant to a claim. It deliberately separates **article-pattern classification** from **evidence discovery**: neither a model score nor a similarity score proves that a claim is true or false.
+VerityAI is an experimental research prototype for exploring article-writing patterns and finding material that may be relevant to a claim. It keeps two jobs separate: **article-pattern classification** and **evidence discovery**. Neither a model score nor a similarity score proves that a claim is true or false.
 
-**Live demo:** https://verityai19.streamlit.app/  
-**Repository:** https://github.com/avadhgupta64-png/verityai
+- **Live demo:** https://verityai19.streamlit.app/
+- **Source code:** https://github.com/avadhgupta64-png/verityai
 
-## Capabilities
+## What the app does
 
 ### 1. Article-pattern classifier
-- TF–IDF text features with logistic regression.
-- Trained on the Kaggle Fake and Real News dataset (historical English-language articles).
-- Reports the predicted dataset-style label and the model's score for that class.
-- The score is not a calibrated probability of truth. Dataset labels, publishers, topics, and historical language patterns can introduce bias.
 
-### 2. Claim analysis and evidence discovery
-Choose one of two sources:
-- **Atomic statement breakdown:** splits a pasted excerpt into sentence-level statements for individual review. This is a practical first pass, not a full linguistic claim extractor.\n- **Live news discovery (GDELT):** queries the GDELT DOC API for candidate article headlines and metadata, then ranks candidates with embeddings. It does not guarantee full-text access or assess whether a source actually supports or contradicts the claim.\n- **Evidence coverage and reasoning:** compares key terms with the closest retrieved passage, shows matched terms, a coverage score, a conservative status, source links, and a downloadable JSON analysis log. This transparent lexical heuristic is not natural-language inference and cannot establish truth. The app intentionally does not automatically issue a Verified status.
-- **Local evidence corpus:** retrieves passages from `data/evidence.jsonl`, if supplied. Otherwise, the app clearly identifies the included fictional demonstration corpus.
+- Uses TF–IDF text features and logistic regression.
+- Trained on the Kaggle Fake and Real News dataset, a historical English-language article dataset.
+- Returns a dataset-style label and the model score for that predicted class.
+- The score is **not** a calibrated probability of truth. Publisher, topic, time-period, and dataset-label patterns may influence predictions.
 
-The overall assessment remains **Unverified**. Individual statements may receive a Potentially Misleading caution flag only when a possible negation mismatch is detected; this is not a verdict. Review original pages, dates, context, source quality, independent corroboration, and conflicting reporting before drawing a conclusion.
+### 2. Claim review and evidence discovery
 
-## Technology
+The user can choose one of two evidence sources:
 
-- Python
-- Streamlit
-- scikit-learn: TF–IDF + logistic regression classifier
-- Hugging Face Transformers: `sentence-transformers/all-MiniLM-L6-v2` backbone for passage embeddings
-- FAISS: vector-similarity retrieval
-- Kaggle: historical article dataset
-- GDELT DOC API: live news-article discovery
-- GitHub Actions: repeatable dataset download, training, evaluation, model artifact publication, and unit-test CI
+- **Live news discovery:** searches candidate headlines and metadata through Google News RSS, with GDELT DOC API fallback. Results are leads for human review, not verified evidence.
+- **Local evidence corpus:** retrieves passages from `data/evidence.jsonl` when supplied. If that file is absent, the app uses a clearly labelled fictional sample corpus for interface testing.
 
-**Architecture note:** the article classifier is not a Transformer model. Transformers and FAISS are used in the evidence-retrieval path.
+The app splits pasted text into sentence-level statements, retrieves related passages, and displays shared terms and a lexical coverage score. This is a practical first pass, not a complete linguistic claim extractor. The current implementation does not establish whether a passage supports or contradicts a claim, and it does not automatically issue a **Verified** verdict. The overall assessment remains **Unverified**.
+
+Different percentage figures with overlapping topic terms may be flagged for review. Such a flag is only a prompt: the figures may refer to different periods, locations, definitions, or methods.
+
+## Technology and model provenance
+
+- **Python** — application and analysis code.
+- **Streamlit** — interactive web interface.
+- **scikit-learn** — TF–IDF vectorization and logistic-regression article classifier.
+- **Kaggle Fake and Real News dataset** — historical labelled articles used to train the classifier.
+- **Hugging Face Transformers** — loads the pretrained `sentence-transformers/all-MiniLM-L6-v2` backbone for passage embeddings.
+- **FAISS** — similarity-based ranking of local passage embeddings.
+- **Google News RSS and GDELT DOC API** — discovery of candidate news headlines and metadata.
+- **GitHub Actions** — automated unit tests and an optional dataset-download/training workflow.
+
+**Architecture clarification:** the article classifier is TF–IDF plus logistic regression, not a Transformer model. Transformers and FAISS are used for evidence retrieval. Retrieval similarity and lexical overlap are ranking signals, not truth probabilities.
 
 ## Run locally
 
@@ -40,71 +46,102 @@ Python 3.10–3.12 is recommended.
 
 ```bash
 python -m venv .venv
-# Windows: .venv\Scripts\activate
-# macOS/Linux: source .venv/bin/activate
+# Windows:
+.venv\Scripts\activate
+# macOS/Linux:
+source .venv/bin/activate
+
+python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 streamlit run app.py
 ```
 
-The first evidence-discovery request may download the Hugging Face embedding model and can take longer than later requests. Live news discovery requires outbound access to the GDELT API. Pushes and pull requests to `main` run the automated test suite through GitHub Actions.
+The first evidence-retrieval request may download the pretrained embedding model and take longer than later requests. Live news discovery requires internet access. Some providers may rate-limit requests or return incomplete results; a provider failure is not evidence for or against a claim.
 
 ## Train the article classifier
 
-1. Create Kaggle API credentials and configure the Kaggle CLI. Never commit credentials.
-2. Download the dataset:
+1. Configure the Kaggle CLI with your own Kaggle API credentials. **Never commit credentials or tokens.**
+2. Download the dataset into the expected directory:
+
    ```bash
    mkdir -p data/raw
    kaggle datasets download -d clmentbisaillon/fake-and-real-news-dataset -p data/raw --unzip
    ```
-3. Train and evaluate:
+
+3. Train and evaluate the baseline:
+
    ```bash
    python scripts/train_classifier.py
    ```
 
-The training script creates:
-- `models/news_classifier.joblib`
-- `reports/baseline_metrics.json`
+The training script writes:
 
-The GitHub Actions workflow can perform this process without a local Python environment. Configure repository Actions secrets `KAGGLE_USERNAME` and `KAGGLE_KEY`, then open **Actions → Train Kaggle baseline → Run workflow**. On success, the workflow commits the trained model and metrics and uploads a backup artifact.
+- `models/news_classifier.joblib` — trained pipeline.
+- `reports/baseline_metrics.json` — metrics and split details.
 
-The dataset is listed by Kaggle under CC BY-NC-SA 4.0. Review the dataset card and licence terms before reuse; this repository does not grant additional rights or permission for commercial use.
+The GitHub Actions workflow can also perform the training process. Configure the repository secrets `KAGGLE_USERNAME` and `KAGGLE_KEY`, then open **Actions → Train Kaggle baseline → Run workflow**. The workflow is designed to publish the generated model/metrics and upload an artifact. Check the latest workflow run before relying on its result.
+
+The dataset is listed by Kaggle under CC BY-NC-SA 4.0. Review the dataset card and licence terms before reuse. This repository does not grant additional rights or permission for commercial use.
 
 ## Add a local evidence corpus
 
 Create `data/evidence.jsonl` with one JSON object per line. Each record should include:
-- `id`: stable identifier
-- `title`: passage or article title
-- `publisher`: publisher or institution
-- `url`: direct, traceable source URL
-- `date`: publication or update date when known
-- `text`: passage text
 
-Only add material you are entitled to use. Keep source metadata accurate. The included `data/sample_evidence.jsonl` is fictional and must not be presented as real-world evidence.
+- `id` — stable identifier.
+- `title` — passage or article title.
+- `publisher` — publisher or institution.
+- `url` — direct, traceable source URL.
+- `date` — publication or update date when known.
+- `text` — passage text.
 
-## Benchmark and evaluation\n\n\`data/benchmark_15.jsonl\` contains 15 clearly marked synthetic fixtures for exercising statement splitting and evidence-review flows. They are not public-news examples, verified ground truth, or a scored accuracy benchmark. A formal benchmark still needs 15 independently checked public or synthetic claims with adjudicated expected labels and traceable sources.\n\nAutomated unit tests run on pushes and pull requests through GitHub Actions.\n\n## Evaluation and limitations
+Use material you are entitled to store and process. Keep source metadata accurate. The included `data/sample_evidence.jsonl` is fictional and must not be represented as real-world evidence.
 
-The current classifier uses a random stratified 80/20 split. That is a baseline, not proof of generalization; duplicate stories, publisher language, and topic/time-period artifacts can inflate performance. Before making benchmark claims:
-- evaluate on a held-out source, event, or time period;
-- report accuracy, macro-F1, per-class precision/recall, and the confusion matrix;
-- inspect errors and test out-of-distribution examples;
-- evaluate evidence retrieval with human-labelled relevance judgments and Recall@1, Recall@3, and Recall@5;
-- document latency, model version, data provenance, and failure cases.
+## Tests and evaluation
 
-Live search results are candidate sources, not verified evidence. GDELT metadata and headlines can be incomplete or noisy, and retrieval similarity is not a truth score. VerityAI does not currently automatically classify evidence as supporting or contradicting a claim. The final assessment remains **Unverified** pending human review.
+Run the unit tests with:
+
+```bash
+python -m pytest -q
+```
+
+GitHub Actions is configured to run the tests on pushes to `main`, pull requests targeting `main`, and manual workflow dispatches.
+
+`data/benchmark_15.jsonl` contains synthetic fixtures for exercising review flows. It is **not** a public-news dataset, verified ground truth, or a scored accuracy benchmark.
+
+The current classifier evaluation uses a random stratified 80/20 split. That is only an initial baseline: duplicate stories and publisher, topic, or time-period patterns can inflate apparent performance. Stronger evaluation should use held-out sources, events, or time periods and report accuracy, macro-F1, per-class precision/recall, a confusion matrix, out-of-distribution errors, and data provenance. Evidence retrieval also needs human-labelled relevance judgements and Recall@1, Recall@3, and Recall@5. See [docs/evaluation.md](docs/evaluation.md).
 
 ## Project structure
 
 ```text
-app.py                         Streamlit interface
-src/verityai/classifier.py     Classifier loading and inference
-src/verityai/retrieval.py      Transformer embeddings and FAISS retrieval
-scripts/train_classifier.py    Training and baseline evaluation
-data/sample_evidence.jsonl     Fictional demo corpus
-docs/evaluation.md             Evaluation protocol
-.github/workflows/tests.yml    Continuous integration tests\ntests/test_assessment.py       Evidence-loader, live-search parser, and classifier tests
-.github/workflows/             Training workflow
+app.py                              Streamlit interface and user workflow
+src/verityai/__init__.py            Package description
+src/verityai/assessment.py          Statement splitting and conservative assessment
+src/verityai/classifier.py          Loading and inference for the trained classifier
+src/verityai/live_search.py         RSS/GDELT candidate-news discovery and parsing
+src/verityai/retrieval.py           Evidence loading, embeddings, and FAISS retrieval
+scripts/train_classifier.py         Training and baseline evaluation
+tests/test_assessment.py            Unit tests for assessment, search, retrieval, and classifier
+data/sample_evidence.jsonl          Fictional demonstration corpus
+data/benchmark_15.jsonl             Synthetic review-flow fixtures
+models/news_classifier.joblib       Trained model artifact
+reports/baseline_metrics.json       Saved baseline evaluation metrics
+requirements.txt                    Python dependencies
+docs/evaluation.md                  Evaluation plan and quality gates
+docs/competition-readiness.md       Competition readiness checklist
+.github/workflows/tests.yml         Automated test workflow
+.github/workflows/train-kaggle.yml  Optional dataset-download/training workflow
 ```
 
-## Responsible use
+## AI assistance and attribution
 
-Do not use this prototype as the sole basis for consequential decisions. Verify claims using original, authoritative, current, and independent sources. Do not describe a prediction as proof or a similarity score as confidence in truth.
+ChatGPT was used during this revision to review code readability, consolidate duplicated logic, and improve the project documentation. This disclosure describes the assistance used for this revision; it does not imply that ChatGPT trained the classifier or created the pretrained embedding model. If other AI tools were used earlier to create or modify code, models, or components, list those tools and their role here before submitting the project. The project author should be able to explain the implementation and verify all generated or suggested changes.
+
+## Limitations and responsible use
+
+- A headline or source link alone does not establish that a claim is supported or contradicted.
+- GDELT's indexed/seen date is not necessarily the publisher's original publication date.
+- The included sample evidence is fictional.
+- The current assessment is not a validated natural-language inference system.
+- Do not use this prototype as the sole basis for consequential decisions.
+
+Review original pages, dates, context, source quality, independent corroboration, and conflicting reporting before drawing a conclusion. Describe VerityAI as a research prototype, not an automated truth detector.
