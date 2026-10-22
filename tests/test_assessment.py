@@ -114,3 +114,52 @@ def test_classifier_returns_label_and_predicted_class_score():
     assert classify_article(FakeModel(), "Headline", "body") == {
         "label": "Real", "score": pytest.approx(0.8)
     }
+
+
+
+def test_local_evidence_rejects_malformed_json_with_line_number(tmp_path):
+    path = tmp_path / "evidence.jsonl"
+    path.write_text('{"id":"1","title":"Example","text":"Passage"}\n{bad json}\n', encoding="utf-8")
+    with pytest.raises(ValueError, match="Line 2: invalid JSON"):
+        load_evidence(path)
+
+
+def test_local_evidence_rejects_non_object_json(tmp_path):
+    path = tmp_path / "evidence.jsonl"
+    path.write_text('["not", "an", "object"]\n', encoding="utf-8")
+    with pytest.raises(ValueError, match="JSON object"):
+        load_evidence(path)
+
+
+def test_local_evidence_rejects_duplicate_ids(tmp_path):
+    path = tmp_path / "evidence.jsonl"
+    row = {"id": "same", "title": "Example", "text": "Passage"}
+    path.write_text(json.dumps(row) + "\n" + json.dumps(row) + "\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="duplicate evidence id"):
+        load_evidence(path)
+
+
+@pytest.mark.parametrize("url", ["javascript:alert(1)", "file:///etc/passwd", "example.com/story"])
+def test_local_evidence_rejects_unsafe_or_relative_urls(tmp_path, url):
+    path = tmp_path / "evidence.jsonl"
+    row = {"id": "1", "title": "Example", "text": "Passage", "url": url}
+    path.write_text(json.dumps(row) + "\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="absolute HTTP or HTTPS URL"):
+        load_evidence(path)
+
+
+def test_local_evidence_accepts_http_url_and_optional_metadata(tmp_path):
+    path = tmp_path / "evidence.jsonl"
+    row = {
+        "id": "1", "title": "Example", "text": "Passage",
+        "url": "https://example.com/story", "publisher": "Example News", "date": "2026-10-22"
+    }
+    path.write_text(json.dumps(row) + "\n", encoding="utf-8")
+    assert load_evidence(path)[0]["url"] == row["url"]
+
+
+def test_claim_splitter_does_not_silently_drop_statements_over_twelve():
+    claim = " ".join(f"Statement number {number}." for number in range(1, 15))
+    facts = split_claim_into_facts(claim)
+    assert len(facts) == 14
+    assert facts[-1] == "Statement number 14."
