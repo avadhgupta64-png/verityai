@@ -21,7 +21,7 @@ It contains Fake.csv (about 23.5k articles) and True.csv (about 21.4k articles),
 
     python scripts/train_classifier.py
 
-The script creates models/news_classifier.joblib and reports/baseline_metrics.json. The downloaded CSVs and generated model are intentionally not committed because they are large or locally generated. The app's classifier tab becomes available once the model file exists.
+The script creates models/news_classifier.joblib and reports/baseline_metrics.json. The downloaded CSVs and generated model are intentionally not committed because they are large or locally generated. The app's classifier tab becomes available once the model file exists.\n\n### Run training in GitHub Actions (no local Python setup)\n\n1. In this repository, open **Settings → Secrets and variables → Actions → New repository secret**.\n2. Add `KAGGLE_USERNAME` (your Kaggle username) and `KAGGLE_KEY` (the API key from your Kaggle token). Never paste the key into a commit, issue, or chat.\n3. Open **Actions → Train Kaggle baseline → Run workflow**.\n4. When the run succeeds, open that workflow run and download the `verityai-kaggle-baseline` artifact. It contains the trained model and evaluation metrics.\n\nThe workflow does not commit the model or dataset into the repository. Kaggle credentials must be supplied by the repository owner, and the dataset's terms still apply.
 
 ## Run the app
 
