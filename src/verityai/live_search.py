@@ -84,5 +84,15 @@ def search_live_news(query: str, limit: int = 10, timeout: int = 20) -> list[dic
     try:
         payload = response.json()
     except ValueError as exc:
-        raise ValueError("GDELT returned a non-JSON response.") from exc
+        # GDELT sometimes returns an HTML/plain-text error page or transient
+        # gateway response instead of JSON. Surface a useful diagnostic without
+        # dumping a potentially large response into the UI.
+        content_type = response.headers.get("Content-Type", "unknown")
+        preview = " ".join((response.text or "").split())[:180]
+        raise ValueError(
+            "GDELT returned a non-JSON response "
+            f"(HTTP {response.status_code}, Content-Type: {content_type}). "
+            f"Response preview: {preview or '[empty response]'}. "
+            "This may be a temporary GDELT/API response issue; retry or use the local evidence corpus."
+        ) from exc
     return parse_gdelt_articles(payload)
