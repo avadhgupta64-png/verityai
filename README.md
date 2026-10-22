@@ -132,9 +132,13 @@ docs/competition-readiness.md       Competition readiness checklist
 .github/workflows/train-kaggle.yml  Optional dataset-download/training workflow
 ```
 
-## AI assistance and attribution
+## Authorship, AI assistance, and attribution
 
-ChatGPT was used during this revision to review code readability, consolidate duplicated logic, and improve the project documentation. This disclosure describes the assistance used for this revision; it does not imply that ChatGPT trained the classifier or created the pretrained embedding model. If other AI tools were used earlier to create or modify code, models, or components, list those tools and their role here before submitting the project. The project author should be able to explain the implementation and verify all generated or suggested changes.
+The original VerityAI implementation was written by the project author without using AI tools to generate or modify the original code.
+
+ChatGPT was used later, during a separate review revision, to suggest improvements to code readability, consolidation of duplicated logic, and project documentation. Those later review changes should be checked by the author and kept distinct from the original implementation in the Git history. No claim is made here that an external plagiarism checker has certified the project as plagiarism-free.
+
+Third-party libraries, the pretrained embedding model, and the training dataset are external dependencies and are identified in the relevant sections above. Review their own licences and attribution requirements before distribution or competition submission.
 
 ## Limitations and responsible use
 
