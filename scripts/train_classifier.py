@@ -28,7 +28,8 @@ def read_articles(path: Path, label: str) -> pd.DataFrame:
     frame["label"] = label
     return frame[["content", "label"]]
 
-def main() -> None:\n    """Train the baseline, print evaluation metrics, and save reproducible outputs."""
+def main() -> None:
+    """Train the baseline, print evaluation metrics, and save reproducible outputs."""
     fake = read_articles(RAW / "Fake.csv", "Fake")
     real = read_articles(RAW / "True.csv", "Real")
     data = pd.concat([fake, real], ignore_index=True).drop_duplicates("content")
