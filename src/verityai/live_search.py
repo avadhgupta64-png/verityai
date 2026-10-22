@@ -6,10 +6,10 @@ from __future__ import annotations
 
 from datetime import datetime
 import re
+import time
 import xml.etree.ElementTree as ET
-from urllib.parse import quote_plus
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import quote_plus, urlparse
 
 import requests
 
@@ -85,7 +85,6 @@ def _request_gdelt(query: str, limit: int, timeout: int) -> requests.Response:
             last_response = response
             # Retry temporary server errors and rate limiting.
             if response.status_code in {429, 500, 502, 503, 504} and attempt < 2:
-                import time
                 time.sleep(0.5 * (attempt + 1))
                 continue
             response.raise_for_status()
@@ -93,7 +92,6 @@ def _request_gdelt(query: str, limit: int, timeout: int) -> requests.Response:
         except requests.RequestException as exc:
             last_error = exc
             if attempt < 2:
-                import time
                 time.sleep(0.5 * (attempt + 1))
                 continue
             raise
@@ -160,9 +158,12 @@ def build_search_queries(query: str) -> list[str]:
     }
     tokens = re.findall(r"[A-Za-z][A-Za-z'-]{2,}|\d+(?:\.\d+)?%?", cleaned)
     keywords = []
+    seen_keywords: set[str] = set()
     for token in tokens:
-        if token.lower() not in stop_words and token.lower() not in {x.lower() for x in keywords}:
+        normalized = token.lower()
+        if normalized not in stop_words and normalized not in seen_keywords:
             keywords.append(token)
+            seen_keywords.add(normalized)
     variants = [cleaned]
     # Keep quantities, years and distinctive nouns together where possible.
     numbers = [token for token in tokens if re.fullmatch(r"\d{4}|\d+(?:\.\d+)?%?", token)]
@@ -173,9 +174,12 @@ def build_search_queries(query: str) -> list[str]:
     if len(distinctive) >= 2:
         variants.append(" ".join(distinctive))
     unique = []
+    seen_variants: set[str] = set()
     for variant in variants:
-        if variant and variant.lower() not in {item.lower() for item in unique}:
+        normalized = variant.lower()
+        if variant and normalized not in seen_variants:
             unique.append(variant)
+            seen_variants.add(normalized)
     return unique[:3]
 
 
