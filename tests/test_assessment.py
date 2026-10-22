@@ -4,7 +4,7 @@ import pytest
 
 from src.verityai.assessment import assess_facts, find_numeric_discrepancies, split_claim_into_facts
 from src.verityai.classifier import classify_article
-from src.verityai.live_search import parse_gdelt_articles
+from src.verityai.live_search import build_search_queries, parse_gdelt_articles
 from src.verityai.retrieval import load_evidence
 
 
@@ -26,6 +26,17 @@ def test_rejects_empty_corpus(tmp_path):
     path.write_text("\n", encoding="utf-8")
     with pytest.raises(ValueError, match="empty"):
         load_evidence(path)
+
+
+def test_live_search_builds_focused_query_variants():
+    queries = build_search_queries(
+        "A city planted 500 trees in 2025. Tree cover increased by 20%."
+    )
+    assert len(queries) >= 2
+    assert len(queries) <= 3
+    assert queries[0].startswith("A city planted")
+    assert any("500" in query and "2025" in query for query in queries)
+    assert build_search_queries("   ") == []
 
 
 def test_gdelt_parser_filters_invalid_and_duplicate_urls():
