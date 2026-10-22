@@ -5,7 +5,7 @@ import json
 import requests
 import streamlit as st
 
-from src.verityai.assessment import assess_facts, split_claim_into_facts
+from src.verityai.assessment import assess_facts, find_numeric_discrepancies, split_claim_into_facts
 from src.verityai.classifier import classify_article, load_classifier
 from src.verityai.live_search import search_live_news
 from src.verityai.retrieval import EvidenceRetriever, load_evidence
@@ -99,11 +99,20 @@ with analysis_tab:
         try:
             with st.spinner("Finding relevant material for each statement…"):
                 if source_choice == "Live news headlines (GDELT)":
-                    records = search_live_news(claim.strip(), limit=20)
+                    # Search each statement separately: a long combined paragraph
+                    # often produces poor search results or no results at all.
+                    live_records = []
+                    for fact in facts:
+                        live_records.extend(search_live_news(fact, limit=max(10, result_count * 3)))
+                    unique_records = {}
+                    for item in live_records:
+                        identity = item.get("url") or item.get("id") or item.get("title")
+                        unique_records[identity] = item
+                    records = list(unique_records.values())
                     if not records:
-                        st.warning("No candidate headlines were found. Try a shorter claim or use another source.")
+                        st.warning("GDELT returned no candidate headlines for these statements. No local/demo evidence was substituted. Try shorter wording or switch to the local corpus.")
                         st.stop()
-                    st.caption(f"Found {len(records)} candidate headlines. Headlines alone may not contain enough evidence.")
+                    st.caption(f"Found {len(records)} unique candidate headlines across {len(facts)} statement-specific searches. Headlines and metadata alone may not contain enough evidence.")
                 else:
                     records = local_records
 
@@ -120,13 +129,22 @@ with analysis_tab:
                         unique[identity] = item
                 evidence = sorted(unique.values(), key=lambda item: item["score"], reverse=True)
                 assessments = assess_facts(facts, evidence)
+                discrepancies = find_numeric_discrepancies(facts)
 
             st.markdown("#### 2. Evidence assessment")
             st.info(
                 "Overall status: **Unverified**. The current assessment uses retrieval and transparent word-overlap signals. "
                 "It does not yet have a validated natural-language inference model or authoritative-source review."
             )
-            st.caption("Evidence coverage score is based on shared terms with the closest passage. It is not a truth probability or calibrated confidence score.")
+            st.caption("Evidence coverage score is based on shared terms with a sufficiently relevant passage. It is not a truth probability or calibrated confidence score.")
+            if discrepancies:
+                st.markdown("#### Possible numerical discrepancies to review")
+                st.warning("Different figures may refer to different locations, periods, definitions, or methods. These are prompts for human review, not automatic contradiction findings.")
+                for discrepancy in discrepancies:
+                    st.write(f"**Figures:** {', '.join(discrepancy['figures'])}")
+                    st.write(discrepancy["statement_a"])
+                    st.write(discrepancy["statement_b"])
+                    st.caption(discrepancy["note"])
             for number, item in enumerate(assessments, start=1):
                 with st.container(border=True):
                     st.markdown(f"**Statement {number}: {item['fact']}**")
@@ -154,13 +172,16 @@ with analysis_tab:
                 "claim": claim,
                 "atomic_statements": facts,
                 "overall_status": "Unverified",
-                "method": "Transformer embeddings + FAISS retrieval + lexical coverage heuristic",
+                "method": "Transformer embeddings + FAISS retrieval + lexical relevance heuristic",
                 "limitations": [
                     "No automatic truth determination",
-                    "GDELT mode searches headlines and metadata, not full article content",
+                    "GDELT mode searches each statement separately and returns headlines/metadata, not full article content",
+                    "Weak lexical matches are omitted as source matches",
+                    "Different percentages may be flagged for human review but are not automatically treated as contradictions",
                     "Lexical overlap is not entailment",
                     "The included demo corpus is fictional",
                 ],
+                "possible_numeric_discrepancies": discrepancies,
                 "assessments": [
                     {
                         "fact": item["fact"],
