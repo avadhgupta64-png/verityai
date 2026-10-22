@@ -18,7 +18,8 @@ RAW = ROOT / "data" / "raw"
 def read_articles(path: Path, label: str) -> pd.DataFrame:
     if not path.exists():
         raise FileNotFoundError(f"Missing {path}. Download the Kaggle data using README instructions.")
-    # Keep only the two fields used by the baseline and normalise missing values.\n    frame = pd.read_csv(path)
+    # Keep only the two fields used by the baseline and normalise missing values.
+    frame = pd.read_csv(path)
     if not {"title", "text"}.issubset(frame.columns):
         raise ValueError(f"{path.name} must contain title and text columns.")
     frame = frame[["title", "text"]].fillna("")
