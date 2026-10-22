@@ -15,7 +15,7 @@ from src.verityai.retrieval import EvidenceRetriever, load_evidence
 def find_numeric_discrepancies(facts):
     """Flag differing percentages for human review; never label them contradictions."""
     results = []
-    percent_pattern = re.compile(r"(\\d+(?:\\.\\d+)?)\\s*%")
+    percent_pattern = re.compile(r"(\d+(?:\\.\d+)?)\s*%")
     stop_words = {
         "the", "and", "for", "from", "with", "that", "this", "was", "were",
         "are", "has", "have", "had", "into", "during", "year", "years",
@@ -25,7 +25,7 @@ def find_numeric_discrepancies(facts):
     def terms(text):
         return {
             term.lower()
-            for term in re.findall(r"[A-Za-z][A-Za-z'-]{2,}|\\d+(?:\\.\\d+)?", text)
+            for term in re.findall(r"[A-Za-z][A-Za-z'-]{2,}|\d+(?:\\.\d+)?", text)
             if term.lower() not in stop_words
         }
 
