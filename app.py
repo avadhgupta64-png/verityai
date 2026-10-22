@@ -165,14 +165,23 @@ with analysis_tab:
                             )
                         else:
                             st.error(
-                                "GDELT could not be reached for any statement, so VerityAI cannot "
-                                "produce a live-news evidence assessment. This is a live-service/network "
-                                "failure, not a finding about whether the claim is true. Try again later "
-                                "or select Local evidence corpus (the bundled sample is fictional)."
+                                "Live news search failed for every statement. VerityAI tried its primary "
+                                "provider (GDELT) and the Google News RSS fallback, but neither produced "
+                                "usable results. This is a provider/network failure, not a finding about "
+                                "whether the claim is true. No local/demo evidence was substituted."
                             )
-                            with st.expander("Live-search diagnostics"):
+                            with st.expander("Live-search diagnostics (provider errors)"):
+                                st.caption(
+                                    "Each line should include both the GDELT error and the Google News RSS "
+                                    "fallback error. If it mentions only GDELT, the deployed app may be "
+                                    "running an older version of live_search.py."
+                                )
                                 for failure in live_search_failures:
                                     st.code(failure)
+                            st.info(
+                                "If this persists, open Manage app → Cloud logs and check whether the latest "
+                                "GitHub commit has been deployed. Streamlit Community Cloud may need a manual reboot."
+                            )
                             st.stop()
                     unique_records = {}
                     for item in live_records:
