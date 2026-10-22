@@ -30,7 +30,7 @@ The assessment intentionally remains **Unverified**. Review original pages, date
 - FAISS: vector-similarity retrieval
 - Kaggle: historical article dataset
 - GDELT DOC API: live news-article discovery
-- GitHub Actions: repeatable dataset download, training, evaluation, and model artifact publication
+- GitHub Actions: repeatable dataset download, training, evaluation, model artifact publication, and unit-test CI
 
 **Architecture note:** the article classifier is not a Transformer model. Transformers and FAISS are used in the evidence-retrieval path.
 
@@ -46,7 +46,7 @@ python -m pip install -r requirements.txt
 streamlit run app.py
 ```
 
-The first evidence-discovery request may download the Hugging Face embedding model and can take longer than later requests. Live news discovery requires outbound access to the GDELT API.
+The first evidence-discovery request may download the Hugging Face embedding model and can take longer than later requests. Live news discovery requires outbound access to the GDELT API. Pushes and pull requests to `main` run the automated test suite through GitHub Actions.
 
 ## Train the article classifier
 
@@ -101,7 +101,7 @@ src/verityai/retrieval.py      Transformer embeddings and FAISS retrieval
 scripts/train_classifier.py    Training and baseline evaluation
 data/sample_evidence.jsonl     Fictional demo corpus
 docs/evaluation.md             Evaluation protocol
-tests/test_assessment.py       Evidence-loader tests
+.github/workflows/tests.yml    Continuous integration tests\ntests/test_assessment.py       Evidence-loader, live-search parser, and classifier tests
 .github/workflows/             Training workflow
 ```
 
