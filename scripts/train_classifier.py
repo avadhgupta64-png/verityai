@@ -1,6 +1,8 @@
-"""Train a TF-IDF + logistic-regression baseline on downloaded Kaggle CSVs."""
-from pathlib import Path
+"""Train and evaluate the TF-IDF/logistic-regression article baseline."""
+
 import json
+from pathlib import Path
+
 import joblib
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -12,10 +14,11 @@ from sklearn.pipeline import Pipeline
 ROOT = Path(__file__).resolve().parents[1]
 RAW = ROOT / "data" / "raw"
 
+
 def read_articles(path: Path, label: str) -> pd.DataFrame:
     if not path.exists():
         raise FileNotFoundError(f"Missing {path}. Download the Kaggle data using README instructions.")
-    frame = pd.read_csv(path)
+    # Keep only the two fields used by the baseline and normalise missing values.\n    frame = pd.read_csv(path)
     if not {"title", "text"}.issubset(frame.columns):
         raise ValueError(f"{path.name} must contain title and text columns.")
     frame = frame[["title", "text"]].fillna("")
@@ -24,7 +27,7 @@ def read_articles(path: Path, label: str) -> pd.DataFrame:
     frame["label"] = label
     return frame[["content", "label"]]
 
-def main():
+def main() -> None:\n    """Train the baseline, print evaluation metrics, and save reproducible outputs."""
     fake = read_articles(RAW / "Fake.csv", "Fake")
     real = read_articles(RAW / "True.csv", "Real")
     data = pd.concat([fake, real], ignore_index=True).drop_duplicates("content")
