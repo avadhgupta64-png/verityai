@@ -17,17 +17,17 @@ STOP_WORDS = {
 
 def split_claim_into_facts(claim: str) -> list[str]:
     """Split a paragraph into reviewable sentence-level statements."""
-    cleaned = re.sub(r"\\s+", " ", (claim or "")).strip()
+    cleaned = re.sub(r"\s+", " ", (claim or "")).strip()
     if not cleaned:
         return []
-    parts = re.split(r"(?<=[.!?])\\s+(?=[A-Z0-9“\"'])", cleaned)
-    return [part.strip(" \\t\\n") for part in parts if part.strip()][:12]
+    parts = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9“\"'])", cleaned)
+    return [part.strip(" \t\n") for part in parts if part.strip()][:12]
 
 
 def _terms(text: str) -> set[str]:
     return {
         term.lower()
-        for term in re.findall(r"[A-Za-z][A-Za-z'-]{2,}|\\d+(?:\\.\\d+)?", text)
+        for term in re.findall(r"[A-Za-z][A-Za-z'-]{2,}|\d+(?:\.\d+)?", text)
         if term.lower() not in STOP_WORDS
     }
 
@@ -46,8 +46,7 @@ def assess_facts(facts: list[str], evidence: list[dict[str, Any]]) -> list[dict[
         candidates.sort(key=lambda row: (row[0], row[1]), reverse=True)
         best_coverage, overlap, best, shared = candidates[0] if candidates else (0.0, 0, {}, set())
 
-        # A weak match is not shown as the statement's "closest source": that
-        # wording would imply relevance that the text signals do not establish.
+        # Weak matches are not presented as relevant sources.
         relevant = bool(candidates and best_coverage >= 0.20 and overlap >= 2)
         enough = best_coverage >= 0.55 and overlap >= 3
         if not relevant:
@@ -74,7 +73,7 @@ def find_numeric_discrepancies(facts: list[str]) -> list[dict[str, Any]]:
     This is a review prompt only; it cannot determine whether the figures conflict.
     """
     results: list[dict[str, Any]] = []
-    percent_pattern = re.compile(r"(\\d+(?:\\.\\d+)?)\\s*%")
+    percent_pattern = re.compile(r"(\d+(?:\.\d+)?)\s*%")
     for left_index, left in enumerate(facts):
         left_values = percent_pattern.findall(left)
         if not left_values:
