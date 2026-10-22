@@ -141,8 +141,37 @@ with analysis_tab:
                     # Search each statement separately: a long combined paragraph
                     # often produces poor search results or no results at all.
                     live_records = []
+                    live_search_failures = []
                     for fact in facts:
-                        live_records.extend(search_live_news(fact, limit=max(10, result_count * 3)))
+                        try:
+                            live_records.extend(
+                                search_live_news(fact, limit=max(10, result_count * 3))
+                            )
+                        except requests.RequestException as exc:
+                            # Keep usable results from other statements if GDELT
+                            # fails intermittently, but never substitute demo evidence.
+                            live_search_failures.append(
+                                f"{fact}: {type(exc).__name__}: {str(exc)[:180]}"
+                            )
+                    if live_search_failures:
+                        if live_records:
+                            st.warning(
+                                f"Live news search failed for {len(live_search_failures)} of "
+                                f"{len(facts)} statements. Results below use only successful "
+                                "live searches; failed statements are not backed by live results. "
+                                "No local/demo evidence was substituted."
+                            )
+                        else:
+                            st.error(
+                                "GDELT could not be reached for any statement, so VerityAI cannot "
+                                "produce a live-news evidence assessment. This is a live-service/network "
+                                "failure, not a finding about whether the claim is true. Try again later "
+                                "or select Local evidence corpus (the bundled sample is fictional)."
+                            )
+                            with st.expander("Live-search diagnostics"):
+                                for failure in live_search_failures:
+                                    st.code(failure)
+                            st.stop()
                     unique_records = {}
                     for item in live_records:
                         identity = item.get("url") or item.get("id") or item.get("title")
