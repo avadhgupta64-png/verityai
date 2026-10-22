@@ -21,7 +21,7 @@ def split_claim_into_facts(claim: str) -> list[str]:
     if not cleaned:
         return []
     parts = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9“\"'])", cleaned)
-    return [part.strip(" \t\n") for part in parts if part.strip()][:12]
+    return [part.strip(" \t\n") for part in parts if part.strip()]
 
 
 def _terms(text: str) -> set[str]:
