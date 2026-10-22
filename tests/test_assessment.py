@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from src.verityai.assessment import assess_facts, split_claim_into_facts
+from src.verityai.assessment import assess_facts, find_numeric_discrepancies, split_claim_into_facts
 from src.verityai.classifier import classify_article
 from src.verityai.live_search import parse_gdelt_articles
 from src.verityai.retrieval import load_evidence
@@ -62,13 +62,26 @@ def test_assessment_abstains_when_no_evidence_exists():
     assert result[0]["source"] is None
 
 
-def test_assessment_explains_weak_match():
+def test_assessment_does_not_attach_irrelevant_source():
     result = assess_facts(
-        ["The city opened three clinics."],
-        [{"id": "1", "title": "Weather report", "text": "Rain fell across the region."}],
+        ["The council planted 500 trees in 2025."],
+        [{"id": "1", "title": "School garden report", "text": "The garden contains twelve planter boxes."}],
     )
     assert result[0]["status"] == "Unverified"
-    assert result[0]["reason"]
+    assert result[0]["source"] is None
+    assert result[0]["coverage_score"] == 0
+    assert "No sufficiently relevant passage" in result[0]["reason"]
+
+
+def test_numeric_discrepancy_is_a_review_prompt_not_a_verdict():
+    facts = [
+        "The report claims that tree cover increased by 20% during the year.",
+        "An independent environmental survey says tree cover increased by only 5%.",
+    ]
+    results = find_numeric_discrepancies(facts)
+    assert len(results) == 1
+    assert results[0]["figures"] == ["20%", "5%"]
+    assert "Check whether" in results[0]["note"]
 
 
 def test_classifier_rejects_empty_input():
