@@ -1,0 +1,54 @@
+name: Train Kaggle baseline
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+      KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install training dependencies
+        run: python -m pip install --upgrade pip pandas scikit-learn joblib kaggle
+
+      - name: Validate Kaggle credentials
+        run: |
+          if [ -z "$KAGGLE_USERNAME" ] || [ -z "$KAGGLE_KEY" ]; then
+            echo "::error::Add repository Actions secrets KAGGLE_USERNAME and KAGGLE_KEY before running this workflow."
+            exit 1
+          fi
+
+      - name: Download and extract dataset
+        run: |
+          mkdir -p data/raw
+          kaggle datasets download -d clmentbisaillon/fake-and-real-news-dataset -p data/raw --unzip
+          test -s data/raw/Fake.csv
+          test -s data/raw/True.csv
+
+      - name: Train and evaluate baseline
+        run: python scripts/train_classifier.py
+
+      - name: Upload model and metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: verityai-kaggle-baseline
+          path: |
+            models/news_classifier.joblib
+            reports/baseline_metrics.json
+          if-no-files-found: error
+          retention-days: 14
