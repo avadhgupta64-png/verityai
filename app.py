@@ -147,11 +147,13 @@ with analysis_tab:
                             live_records.extend(
                                 search_live_news(fact, limit=max(10, result_count * 3))
                             )
-                        except requests.RequestException as exc:
-                            # Keep usable results from other statements if GDELT
-                            # fails intermittently, but never substitute demo evidence.
+                        except (requests.RequestException, ValueError) as exc:
+                            # GDELT can return HTML/plain text with HTTP 200;
+                            # search_live_news reports that as ValueError. Treat it
+                            # as a per-statement live-search failure, not a fatal
+                            # failure of the whole claim-analysis pipeline.
                             live_search_failures.append(
-                                f"{fact}: {type(exc).__name__}: {str(exc)[:180]}"
+                                f"{fact}: {type(exc).__name__}: {str(exc)[:240]}"
                             )
                     if live_search_failures:
                         if live_records:
