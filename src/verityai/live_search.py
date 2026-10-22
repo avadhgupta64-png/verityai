@@ -149,7 +149,7 @@ def _search_google_news_rss(query: str, limit: int, timeout: int) -> list[dict[s
 
 def build_search_queries(query: str) -> list[str]:
     """Create focused variants so long claim sentences do not dominate search."""
-    cleaned = re.sub(r"\\s+", " ", query or "").strip()
+    cleaned = re.sub(r"\s+", " ", query or "").strip()
     if not cleaned:
         return []
     stop_words = {
@@ -158,14 +158,14 @@ def build_search_queries(query: str) -> list[str]:
         "reports", "says", "said", "while", "only", "increased", "decreased",
         "claim", "claims", "city", "independent", "survey",
     }
-    tokens = re.findall(r"[A-Za-z][A-Za-z'-]{2,}|\\d+(?:\\.\\d+)?%?", cleaned)
+    tokens = re.findall(r"[A-Za-z][A-Za-z'-]{2,}|\d+(?:\.\d+)?%?", cleaned)
     keywords = []
     for token in tokens:
         if token.lower() not in stop_words and token.lower() not in {x.lower() for x in keywords}:
             keywords.append(token)
     variants = [cleaned]
     # Keep quantities, years and distinctive nouns together where possible.
-    numbers = [token for token in tokens if re.fullmatch(r"\\d{4}|\\d+(?:\\.\\d+)?%?", token)]
+    numbers = [token for token in tokens if re.fullmatch(r"\d{4}|\d+(?:\.\d+)?%?", token)]
     focused = numbers[:3] + [token for token in keywords if token not in numbers][:5]
     if len(focused) >= 2:
         variants.append(" ".join(focused))
