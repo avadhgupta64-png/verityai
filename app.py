@@ -1,14 +1,53 @@
 from pathlib import Path
 import hashlib
 import json
+import re
 
 import requests
 import streamlit as st
 
-from src.verityai.assessment import assess_facts, find_numeric_discrepancies, split_claim_into_facts  # claim-analysis helpers
+from src.verityai.assessment import assess_facts, split_claim_into_facts
 from src.verityai.classifier import classify_article, load_classifier
 from src.verityai.live_search import search_live_news
 from src.verityai.retrieval import EvidenceRetriever, load_evidence
+
+
+def find_numeric_discrepancies(facts):
+    """Flag differing percentages for human review; never label them contradictions."""
+    results = []
+    percent_pattern = re.compile(r"(\\d+(?:\\.\\d+)?)\\s*%")
+    stop_words = {
+        "the", "and", "for", "from", "with", "that", "this", "was", "were",
+        "are", "has", "have", "had", "into", "during", "year", "years",
+        "increased", "decreased", "growth", "change", "changed",
+    }
+
+    def terms(text):
+        return {
+            term.lower()
+            for term in re.findall(r"[A-Za-z][A-Za-z'-]{2,}|\\d+(?:\\.\\d+)?", text)
+            if term.lower() not in stop_words
+        }
+
+    for left_index, left in enumerate(facts):
+        left_values = percent_pattern.findall(left)
+        if not left_values:
+            continue
+        left_terms = terms(left)
+        for right in facts[left_index + 1:]:
+            right_values = percent_pattern.findall(right)
+            if not right_values or set(left_values) == set(right_values):
+                continue
+            shared_topic = left_terms & terms(right)
+            if len(shared_topic) >= 2:
+                results.append({
+                    "statement_a": left,
+                    "statement_b": right,
+                    "figures": [f"{value}%" for value in left_values + right_values],
+                    "shared_topic_terms": sorted(shared_topic),
+                    "note": "These statements contain different percentage figures and share topic terms. Check whether they describe the same metric, area, period, and methodology before calling them contradictory.",
+                })
+    return results
 
 ROOT = Path(__file__).resolve().parent
 SAMPLE_PATH = ROOT / "data" / "sample_evidence.jsonl"
