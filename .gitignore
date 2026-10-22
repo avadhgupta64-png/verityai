@@ -10,5 +10,8 @@ __pycache__/
 .DS_Store
 data/evidence.jsonl
 !data/sample_evidence.jsonl
+data/raw/
+models/*.joblib
+reports/*.json
 *.faiss
 *.npy
