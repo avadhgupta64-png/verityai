@@ -1,14 +1,16 @@
-"""VerityAI: evidence discovery and experimental article classification."""
 from pathlib import Path
+import hashlib
 import json
+
 import requests
 import streamlit as st
 
-from src.verityai.retrieval import EvidenceRetriever, load_evidence
-from src.verityai.classifier import load_classifier, classify_article
+from src.verityai.assessment import assess_facts, split_claim_into_facts
+from src.verityai.classifier import classify_article, load_classifier
 from src.verityai.live_search import search_live_news
+from src.verityai.retrieval import EvidenceRetriever, load_evidence
 
-ROOT = Path(__file__).parent
+ROOT = Path(__file__).resolve().parent
 SAMPLE_PATH = ROOT / "data" / "sample_evidence.jsonl"
 USER_PATH = ROOT / "data" / "evidence.jsonl"
 
@@ -19,117 +21,185 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-st.title("🔎 VerityAI")
-st.caption("EVIDENCE BEFORE BELIEF  ·  Experimental news analysis")
-st.markdown(
-    "Investigate a claim by discovering relevant material and reviewing its sources. "
-    "VerityAI is a research prototype: automated scores are signals for review, not verdicts."
+st.title("VerityAI")
+st.caption("EVIDENCE BEFORE BELIEF  |  Misinformation and media-literacy research")
+st.write(
+    "Break a news excerpt into smaller factual statements, find related material, "
+    "and inspect the sources yourself. VerityAI is a research prototype, not an authority on truth."
 )
-with st.expander("How to interpret results", expanded=False):
+
+with st.expander("How results are assessed"):
     st.markdown(
-        "- **Article classifier:** predicts which historical Kaggle dataset label an article resembles; it does not establish truth.\n"
-        "- **Retrieval similarity:** ranks text by semantic similarity; it is not a truth probability.\n"
-        "- **Evidence assessment:** remains *Unverified*. A person must inspect source quality, context, date, and conflicting evidence."
+        "- **Verified** should require strong, attributable evidence and appropriate review. This prototype deliberately does not issue that label automatically.\n"
+        "- **Potentially Misleading** is a caution flag when a possible textual contradiction needs review; it is not a definitive finding.\n"
+        "- **Unverified** means the available material does not establish the statement. It does not mean the statement is false.\n"
+        "- The coverage score describes word overlap with the closest retrieved passage. It is not a probability of truth."
     )
 
-classifier_tab, evidence_tab = st.tabs(["🧪 Article-pattern classifier", "🔎 Evidence discovery"])
+classifier_tab, analysis_tab = st.tabs(["Article-pattern classifier", "Claim analysis"])
 
 with classifier_tab:
-    st.subheader("Experimental Fake / Real article classifier")
+    st.subheader("Historical article-pattern baseline")
     st.write(
-        "This baseline uses TF–IDF features and logistic regression trained on the historical "
-        "Kaggle ISOT Fake and Real News dataset. Publisher, topic, and time-period biases may affect results."
+        "A TF–IDF and logistic-regression model trained on the Kaggle Fake and Real News dataset. "
+        "It predicts dataset-style labels and cannot verify a current claim."
     )
-    title = st.text_input("Article headline (optional)", key="classifier_title")
-    article_text = st.text_area("Article text", height=220, key="classifier_article")
+    headline = st.text_input("Headline (optional)")
+    article = st.text_area("Article text", height=200)
     model = load_classifier()
     if model is None:
-        st.error("The trained model file was not found. Run the Kaggle training workflow and ensure models/news_classifier.joblib is available.")
-    if st.button("Classify article", type="primary", disabled=(model is None or not (title.strip() or article_text.strip()))):
+        st.error("Trained model not found. Run the training workflow and ensure the model file is available.")
+    if st.button("Classify article", type="primary", disabled=model is None or not (headline.strip() or article.strip())):
         try:
-            result = classify_article(model, title, article_text)
+            result = classify_article(model, headline, article)
             st.subheader(f"Dataset-pattern prediction: {result['label']}")
-            st.metric("Model score for predicted class", f"{result['score']:.1%}")
-            st.warning(
-                "This score is not a calibrated probability that the article is true or false. "
-                "Treat this as a dataset-pattern prediction, not a fact-check."
-            )
-        except Exception as exc:
-            st.error(f"Classification failed: {exc}")
+            st.metric("Score for predicted class", f"{result['score']:.1%}")
+            st.warning("This is not a calibrated probability that the article is true or false.")
+        except (ValueError, AttributeError, TypeError) as exc:
+            st.error(f"Could not classify this input: {exc}")
 
-with evidence_tab:
-    st.subheader("Find material relevant to a claim")
-    st.info(
-        "Live search discovers news article headlines and metadata through GDELT. "
-        "It does not guarantee full-text access, source reliability, or claim verification."
-    )
+with analysis_tab:
+    st.subheader("Break down and investigate a claim")
     claim = st.text_area(
-        "Claim to investigate",
-        placeholder="Write one specific, checkable claim…",
-        height=100,
-        key="evidence_claim",
+        "Paste a claim or news excerpt",
+        placeholder="Example: The report was published on Tuesday. It says the city opened two new clinics.",
+        height=150,
     )
-    source_mode = st.radio(
-        "Evidence source",
-        ["Live news discovery (GDELT)", "Local evidence corpus"],
+    source_choice = st.radio(
+        "Where should VerityAI look?",
+        ["Live news headlines (GDELT)", "Local evidence corpus"],
         horizontal=True,
     )
-    top_k = st.slider("Results to display", min_value=1, max_value=5, value=3)
-    if source_mode == "Local evidence corpus":
-        data_path = USER_PATH if USER_PATH.exists() else SAMPLE_PATH
+    result_count = st.slider("Maximum passages per statement", 1, 5, 3)
+    if source_choice == "Local evidence corpus":
+        corpus_path = USER_PATH if USER_PATH.exists() else SAMPLE_PATH
         try:
-            local_evidence = load_evidence(data_path)
+            local_records = load_evidence(corpus_path)
         except (OSError, ValueError, json.JSONDecodeError) as exc:
-            st.error(f"Could not load the evidence corpus: {exc}")
+            st.error(f"The evidence file could not be loaded: {exc}")
             st.stop()
-        if data_path == SAMPLE_PATH:
-            st.warning("Fictional demo corpus active. These passages are not real-world evidence.")
+        if corpus_path == SAMPLE_PATH:
+            st.warning("The included sample corpus is fictional. Use it only to test the interface, never as real evidence.")
         else:
-            st.caption(f"Using local corpus: {data_path.name} ({len(local_evidence)} passages)")
+            st.caption(f"Loaded {len(local_records)} passages from {corpus_path.name}.")
 
-    @st.cache_resource(show_spinner="Loading embedding model and preparing retrieval…")
-    def get_retriever(corpus_signature: str, records_json: str):
+    @st.cache_resource(show_spinner="Loading the embedding model…")
+    def build_retriever(cache_key: str, records_json: str):
         return EvidenceRetriever(json.loads(records_json))
 
+    if st.button("Analyse claim", type="primary", disabled=not claim.strip()):
+        facts = split_claim_into_facts(claim)
+        if not facts:
+            st.warning("Enter at least one factual statement.")
+            st.stop()
+        st.markdown("#### 1. Atomic statements")
+        for number, fact in enumerate(facts, start=1):
+            st.write(f"{number}. {fact}")
 
-    if st.button("Discover evidence", type="primary", disabled=not claim.strip()):
         try:
-            with st.spinner("Searching and ranking relevant material…"):
-                if source_mode == "Live news discovery (GDELT)":
+            with st.spinner("Finding relevant material for each statement…"):
+                if source_choice == "Live news headlines (GDELT)":
                     records = search_live_news(claim.strip(), limit=20)
                     if not records:
-                        st.warning("No article headlines were returned. Try a shorter or more specific claim.")
+                        st.warning("No candidate headlines were found. Try a shorter claim or use another source.")
                         st.stop()
-                    st.caption(f"Live search returned {len(records)} candidate articles. Headlines and metadata only; open sources to review the full context.")
+                    st.caption(f"Found {len(records)} candidate headlines. Headlines alone may not contain enough evidence.")
                 else:
-                    records = local_evidence
+                    records = local_records
+
                 records_json = json.dumps(records, sort_keys=True, ensure_ascii=False)
-                signature = __import__('hashlib').sha256(records_json.encode('utf-8')).hexdigest()
-                retriever = get_retriever(signature, records_json)
-                matches = retriever.search(claim.strip(), top_k=top_k)
-            st.subheader("Assessment: Unverified")
-            st.write(
-                "These are candidate materials ranked for relevance. Similarity does not show support or contradiction. "
-                "Review the original source, publication date, evidence, and independent corroboration."
+                cache_key = hashlib.sha256(records_json.encode("utf-8")).hexdigest()
+                retriever = build_retriever(cache_key, records_json)
+                per_fact_evidence = []
+                for fact in facts:
+                    per_fact_evidence.extend(retriever.search(fact, top_k=result_count))
+                unique = {}
+                for item in per_fact_evidence:
+                    identity = item.get("url") or item.get("id") or item.get("title")
+                    if identity not in unique or item["score"] > unique[identity]["score"]:
+                        unique[identity] = item
+                evidence = sorted(unique.values(), key=lambda item: item["score"], reverse=True)
+                assessments = assess_facts(facts, evidence)
+
+            st.markdown("#### 2. Evidence assessment")
+            st.info(
+                "Overall status: **Unverified**. The current assessment uses retrieval and transparent word-overlap signals. "
+                "It does not yet have a validated natural-language inference model or authoritative-source review."
             )
-            for rank, item in enumerate(matches, start=1):
+            st.caption("Evidence coverage score is based on shared terms with the closest passage. It is not a truth probability or calibrated confidence score.")
+            for number, item in enumerate(assessments, start=1):
                 with st.container(border=True):
-                    st.markdown(f"**{rank}. {item['title']}**")
-                    st.caption(
-                        f"{item.get('publisher', 'Unknown publisher')} · "
-                        f"{item.get('date_label', 'Date')} {item.get('date', 'not supplied')} · "
-                        f"retrieval similarity: {item['score']:.3f}"
-                    )
-                    if source_mode == "Local evidence corpus":
-                        st.write(item["text"])
+                    st.markdown(f"**Statement {number}: {item['fact']}**")
+                    st.write(f"Status: **{item['status']}**")
+                    st.progress(float(item["coverage_score"]), text=f"Textual evidence coverage: {item['coverage_score']:.0%}")
+                    st.write(item["reason"])
+                    if item["matched_terms"]:
+                        st.caption("Shared terms: " + ", ".join(item["matched_terms"]))
+                    source = item.get("source")
+                    if source:
+                        st.markdown(f"**Closest retrieved item:** {source.get('title', 'Untitled source')}")
+                        st.caption(
+                            f"{source.get('publisher', 'Publisher not supplied')} · "
+                            f"{source.get('date_label', 'Date')} {source.get('date', 'not supplied')} · "
+                            f"retrieval similarity {source.get('score', 0):.3f}"
+                        )
+                        if source.get("url"):
+                            st.markdown(f"[Open source]({source['url']})")
+                        if source_choice == "Local evidence corpus":
+                            st.write(source.get("text", ""))
                     else:
-                        st.write("Search result headline and metadata only; the source page has not been independently assessed by VerityAI.")
+                        st.write("No matching source was retrieved for this statement.")
+
+            log = {
+                "claim": claim,
+                "atomic_statements": facts,
+                "overall_status": "Unverified",
+                "method": "Transformer embeddings + FAISS retrieval + lexical coverage heuristic",
+                "limitations": [
+                    "No automatic truth determination",
+                    "GDELT mode searches headlines and metadata, not full article content",
+                    "Lexical overlap is not entailment",
+                    "The included demo corpus is fictional",
+                ],
+                "assessments": [
+                    {
+                        "fact": item["fact"],
+                        "status": item["status"],
+                        "coverage_score": item["coverage_score"],
+                        "matched_terms": item["matched_terms"],
+                        "reason": item["reason"],
+                        "source": item["source"],
+                    }
+                    for item in assessments
+                ],
+            }
+            st.download_button(
+                "Download source-grounded analysis log (JSON)",
+                data=json.dumps(log, ensure_ascii=False, indent=2),
+                file_name="verityai-analysis-log.json",
+                mime="application/json",
+            )
+            st.markdown("#### 3. Retrieved sources")
+            if not evidence:
+                st.write("No source candidates were available.")
+            for rank, item in enumerate(evidence[:10], start=1):
+                with st.container(border=True):
+                    st.markdown(f"**{rank}. {item.get('title', 'Untitled source')}**")
+                    st.caption(
+                        f"{item.get('publisher', 'Publisher not supplied')} · "
+                        f"{item.get('date_label', 'Date')} {item.get('date', 'not supplied')} · "
+                        f"similarity {item.get('score', 0):.3f}"
+                    )
+                    if source_choice == "Local evidence corpus":
+                        st.write(item.get("text", ""))
+                    else:
+                        st.write("Headline and metadata only; review the original page before using it as evidence.")
                     if item.get("url"):
                         st.markdown(f"[Open original source]({item['url']})")
-        except requests.RequestException as exc:
-            st.error(f"Live search is temporarily unavailable. Try again later or switch to the local corpus. Details: {exc}")
+        except requests.RequestException:
+            st.error("The live news service could not be reached. Try again later or switch to the local corpus.")
         except (ValueError, KeyError, RuntimeError) as exc:
-            st.error(f"Evidence discovery could not run. Details: {exc}")
+            st.error(f"Claim analysis could not be completed: {exc}")
 
 st.divider()
-st.caption("VerityAI · Research prototype · Verify independently before relying on a claim.")
+st.caption("VerityAI · Research prototype · Check original sources and context before reaching a conclusion.")
