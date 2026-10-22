@@ -8,3 +8,4 @@ scikit-learn==1.9.1
 joblib>=1.3
 kaggle>=1.6
 pytest>=8.0
+requests>=2.31,<3.0
