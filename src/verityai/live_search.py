@@ -147,35 +147,75 @@ def _search_google_news_rss(query: str, limit: int, timeout: int) -> list[dict[s
     return records
 
 
-def search_live_news(query: str, limit: int = 10, timeout: int = 8) -> list[dict[str, str]]:
-    """Discover candidate headlines using Google News RSS first, then GDELT.
+def build_search_queries(query: str) -> list[str]:
+    """Create focused variants so long claim sentences do not dominate search."""
+    cleaned = re.sub(r"\\s+", " ", query or "").strip()
+    if not cleaned:
+        return []
+    stop_words = {
+        "the", "and", "for", "from", "with", "that", "this", "was", "were",
+        "are", "has", "have", "had", "into", "during", "according", "reported",
+        "reports", "says", "said", "while", "only", "increased", "decreased",
+        "claim", "claims", "city", "independent", "survey",
+    }
+    tokens = re.findall(r"[A-Za-z][A-Za-z'-]{2,}|\\d+(?:\\.\\d+)?%?", cleaned)
+    keywords = []
+    for token in tokens:
+        if token.lower() not in stop_words and token.lower() not in {x.lower() for x in keywords}:
+            keywords.append(token)
+    variants = [cleaned]
+    # Keep quantities, years and distinctive nouns together where possible.
+    numbers = [token for token in tokens if re.fullmatch(r"\\d{4}|\\d+(?:\\.\\d+)?%?", token)]
+    focused = numbers[:3] + [token for token in keywords if token not in numbers][:5]
+    if len(focused) >= 2:
+        variants.append(" ".join(focused))
+    distinctive = [token for token in keywords if token not in numbers][:6]
+    if len(distinctive) >= 2:
+        variants.append(" ".join(distinctive))
+    unique = []
+    for variant in variants:
+        if variant and variant.lower() not in {item.lower() for item in unique}:
+            unique.append(variant)
+    return unique[:3]
 
-    GDELT can rate-limit shared cloud-hosted apps. RSS-first avoids repeatedly
-    hitting a provider already returning 429. Results are candidate links for
-    human review, not verified evidence.
+
+def search_live_news(query: str, limit: int = 10, timeout: int = 8) -> list[dict[str, str]]:
+    """Discover candidate headlines with multi-query RSS search and GDELT fallback.
+
+    Search results remain candidates for human review, not verified evidence.
     """
-    query = query.strip()
-    if not query:
+    queries = build_search_queries(query)
+    if not queries:
         raise ValueError("Enter a claim before searching.")
     if limit < 1:
         raise ValueError("limit must be at least 1.")
 
     provider_errors: list[str] = []
+    rss_records: list[dict[str, str]] = []
+    seen_urls: set[str] = set()
+    # Run a small bounded set of query variants and merge unique results.
+    for search_query in queries:
+        try:
+            found = _search_google_news_rss(search_query, max(1, limit // len(queries)), timeout)
+            for record in found:
+                url = record.get("url", "")
+                if url and url not in seen_urls:
+                    seen_urls.add(url)
+                    rss_records.append(record)
+                if len(rss_records) >= limit:
+                    break
+        except (requests.RequestException, ValueError) as exc:
+            provider_errors.append(
+                f"Google News RSS ({search_query[:70]}): {type(exc).__name__}: {str(exc)[:120]}"
+            )
+        if len(rss_records) >= limit:
+            break
+    if rss_records:
+        return rss_records[:limit]
 
-    # Try RSS first: GDELT was returning HTTP 429 from the hosted app. Do not
-    # burn multiple retry attempts against a rate-limited shared endpoint.
+    # Only hit GDELT if RSS yielded no usable candidates.
     try:
-        rss_records = _search_google_news_rss(query, limit, timeout)
-        if rss_records:
-            return rss_records
-        provider_errors.append("Google News RSS: no usable article records.")
-    except (requests.RequestException, ValueError) as exc:
-        provider_errors.append(
-            f"Google News RSS: {type(exc).__name__}: {str(exc)[:180]}"
-        )
-
-    try:
-        response = _request_gdelt(query, limit, timeout)
+        response = _request_gdelt(queries[0], limit, timeout)
         try:
             payload = response.json()
         except ValueError as exc:
@@ -185,7 +225,7 @@ def search_live_news(query: str, limit: int = 10, timeout: int = 8) -> list[dict
         else:
             records = parse_gdelt_articles(payload)
             if records:
-                return records
+                return records[:limit]
             provider_errors.append("GDELT: no usable article records.")
     except (requests.RequestException, ValueError, RuntimeError) as exc:
         provider_errors.append(
