@@ -148,10 +148,11 @@ def _search_google_news_rss(query: str, limit: int, timeout: int) -> list[dict[s
 
 
 def search_live_news(query: str, limit: int = 10, timeout: int = 8) -> list[dict[str, str]]:
-    """Search live news via GDELT, falling back to Google News RSS.
+    """Discover candidate headlines using Google News RSS first, then GDELT.
 
-    Results are candidate links for human review, not verified evidence. If the
-    primary provider fails, the fallback is attempted before the search fails.
+    GDELT can rate-limit shared cloud-hosted apps. RSS-first avoids repeatedly
+    hitting a provider already returning 429. Results are candidate links for
+    human review, not verified evidence.
     """
     query = query.strip()
     if not query:
@@ -159,41 +160,38 @@ def search_live_news(query: str, limit: int = 10, timeout: int = 8) -> list[dict
     if limit < 1:
         raise ValueError("limit must be at least 1.")
 
-    gdelt_error = None
-    try:
-        response = _request_gdelt(query, limit, timeout)
-        try:
-            payload = response.json()
-        except ValueError:
-            words = re.findall(r"[A-Za-z0-9][A-Za-z0-9'-]{2,}", query)
-            stop_words = {
-                "the", "and", "for", "from", "with", "that", "this", "says",
-                "said", "during", "only", "report", "claims", "claim",
-            }
-            compact_words = []
-            for word in words:
-                if word.lower() not in stop_words and word.lower() not in {
-                    value.lower() for value in compact_words
-                }:
-                    compact_words.append(word)
-            compact_query = " ".join(compact_words[:7]) or query[:80]
-            retry_response = _request_gdelt(compact_query, limit, timeout)
-            payload = retry_response.json()
-        records = parse_gdelt_articles(payload)
-        if records:
-            return records
-        gdelt_error = "GDELT returned no usable article records."
-    except (requests.RequestException, ValueError, RuntimeError) as exc:
-        gdelt_error = f"{type(exc).__name__}: {str(exc)[:180]}"
+    provider_errors: list[str] = []
 
+    # Try RSS first: GDELT was returning HTTP 429 from the hosted app. Do not
+    # burn multiple retry attempts against a rate-limited shared endpoint.
     try:
         rss_records = _search_google_news_rss(query, limit, timeout)
         if rss_records:
             return rss_records
-        raise ValueError("Google News RSS returned no usable article records.")
-    except (requests.RequestException, ValueError) as rss_exc:
-        raise ValueError(
-            "Live news providers failed. "
-            f"GDELT: {gdelt_error} "
-            f"Google News RSS: {type(rss_exc).__name__}: {str(rss_exc)[:180]}"
-        ) from rss_exc
+        provider_errors.append("Google News RSS: no usable article records.")
+    except (requests.RequestException, ValueError) as exc:
+        provider_errors.append(
+            f"Google News RSS: {type(exc).__name__}: {str(exc)[:180]}"
+        )
+
+    try:
+        response = _request_gdelt(query, limit, timeout)
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            provider_errors.append(
+                f"GDELT: non-JSON response ({type(exc).__name__}: {str(exc)[:100]})."
+            )
+        else:
+            records = parse_gdelt_articles(payload)
+            if records:
+                return records
+            provider_errors.append("GDELT: no usable article records.")
+    except (requests.RequestException, ValueError, RuntimeError) as exc:
+        provider_errors.append(
+            f"GDELT: {type(exc).__name__}: {str(exc)[:180]}"
+        )
+
+    raise ValueError(
+        "Live news providers failed. " + " | ".join(provider_errors)
+    )
