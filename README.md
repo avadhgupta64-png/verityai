@@ -1,51 +1,110 @@
-# VerityAI — Evidence Before Belief
+# VerityAI
+### Evidence Before Belief
 
-VerityAI combines an experimental news-article classifier with a separate evidence-retrieval prototype. Classifying writing patterns is not the same as verifying a claim against independent evidence.
+VerityAI is an experimental research prototype for exploring news-article patterns and discovering material relevant to a claim. It deliberately separates **article-pattern classification** from **evidence discovery**: neither a model score nor a similarity score proves that a claim is true or false.
 
-## Kaggle dataset
+**Live demo:** https://verityai19.streamlit.app/  
+**Repository:** https://github.com/avadhgupta64-png/verityai
 
-Primary dataset: https://www.kaggle.com/datasets/clmentbisaillon/fake-and-real-news-dataset
+## Capabilities
 
-It contains Fake.csv (about 23.5k articles) and True.csv (about 21.4k articles), with title, text, subject, and date fields. Kaggle lists the license as CC BY-NC-SA 4.0. Review the dataset card and license before reuse; this project does not grant permission for commercial use.
+### 1. Article-pattern classifier
+- TF–IDF text features with logistic regression.
+- Trained on the Kaggle Fake and Real News dataset (historical English-language articles).
+- Reports the predicted dataset-style label and the model's score for that class.
+- The score is not a calibrated probability of truth. Dataset labels, publishers, topics, and historical language patterns can introduce bias.
 
-### Download the dataset
+### 2. Evidence discovery
+Choose one of two sources:
+- **Live news discovery (GDELT):** queries the GDELT DOC API for candidate article headlines and metadata, then ranks candidates with embeddings. It does not guarantee full-text access or assess whether a source actually supports or contradicts the claim.
+- **Local evidence corpus:** retrieves passages from `data/evidence.jsonl`, if supplied. Otherwise, the app clearly identifies the included fictional demonstration corpus.
 
-1. Sign in to Kaggle and create your Kaggle API token in account settings.
-2. Configure Kaggle CLI credentials using the official documentation: https://github.com/Kaggle/kaggle-api. Keep the token private; never commit it.
-3. From the repository root, install dependencies and run:
+The assessment intentionally remains **Unverified**. Review original pages, dates, context, source quality, independent corroboration, and conflicting reporting before drawing a conclusion.
 
-    pip install -r requirements.txt
-    kaggle datasets download -d clmentbisaillon/fake-and-real-news-dataset -p data/raw --unzip
+## Technology
 
-4. Train and evaluate the baseline:
+- Python
+- Streamlit
+- scikit-learn: TF–IDF + logistic regression classifier
+- Hugging Face Transformers: `sentence-transformers/all-MiniLM-L6-v2` backbone for passage embeddings
+- FAISS: vector-similarity retrieval
+- Kaggle: historical article dataset
+- GDELT DOC API: live news-article discovery
+- GitHub Actions: repeatable dataset download, training, evaluation, and model artifact publication
 
-    python scripts/train_classifier.py
+**Architecture note:** the article classifier is not a Transformer model. Transformers and FAISS are used in the evidence-retrieval path.
 
-The script creates models/news_classifier.joblib and reports/baseline_metrics.json. The downloaded CSVs and generated model are intentionally not committed because they are large or locally generated. The app's classifier tab becomes available once the model file exists.\n\n### Run training in GitHub Actions (no local Python setup)\n\n1. In this repository, open **Settings → Secrets and variables → Actions → New repository secret**.\n2. Add `KAGGLE_USERNAME` (your Kaggle username) and `KAGGLE_KEY` (the API key from your Kaggle token). Never paste the key into a commit, issue, or chat.\n3. Open **Actions → Train Kaggle baseline → Run workflow**.\n4. When the run succeeds, open that workflow run and download the `verityai-kaggle-baseline` artifact. It contains the trained model and evaluation metrics.\n\nThe workflow does not commit the model or dataset into the repository. Kaggle credentials must be supplied by the repository owner, and the dataset's terms still apply.
-
-## Run the app
+## Run locally
 
 Python 3.10–3.12 is recommended.
 
-    python -m venv .venv
-    # Windows: .venv\Scripts\activate
-    # macOS/Linux: source .venv/bin/activate
-    pip install -r requirements.txt
-    streamlit run app.py
+```bash
+python -m venv .venv
+# Windows: .venv\Scripts\activate
+# macOS/Linux: source .venv/bin/activate
+python -m pip install -r requirements.txt
+streamlit run app.py
+```
 
-The first evidence-retrieval query downloads the configured Hugging Face embedding model and may take time.
+The first evidence-discovery request may download the Hugging Face embedding model and can take longer than later requests. Live news discovery requires outbound access to the GDELT API.
 
-## Two different capabilities
+## Train the article classifier
 
-- Kaggle article classifier: TF-IDF + logistic regression trained on historical Fake/True labels. It estimates which dataset label an article resembles. It may learn publisher, topic, political-era, or writing-style artifacts and can be confidently wrong.
-- Evidence retrieval: Hugging Face Transformers embeddings + FAISS searches a local corpus. Similarity scores rank relevance; they are not truth probabilities. The current verdict remains Unverified pending human review. It does not browse the live web.
+1. Create Kaggle API credentials and configure the Kaggle CLI. Never commit credentials.
+2. Download the dataset:
+   ```bash
+   mkdir -p data/raw
+   kaggle datasets download -d clmentbisaillon/fake-and-real-news-dataset -p data/raw --unzip
+   ```
+3. Train and evaluate:
+   ```bash
+   python scripts/train_classifier.py
+   ```
 
-The Kaggle dataset is a binary article-classification dataset, not a source-linked fact-checking corpus. Do not treat its labels as proof that an individual statement is objectively true or false.
+The training script creates:
+- `models/news_classifier.joblib`
+- `reports/baseline_metrics.json`
 
-## Evidence data format
+The GitHub Actions workflow can perform this process without a local Python environment. Configure repository Actions secrets `KAGGLE_USERNAME` and `KAGGLE_KEY`, then open **Actions → Train Kaggle baseline → Run workflow**. On success, the workflow commits the trained model and metrics and uploads a backup artifact.
 
-Add one JSON object per line to data/evidence.jsonl. Each record should include id, title, publisher, url, date, and text. Use sources you are entitled to use and can trace. The included sample file contains fictional demonstration passages only.
+The dataset is listed by Kaggle under CC BY-NC-SA 4.0. Review the dataset card and licence terms before reuse; this repository does not grant additional rights or permission for commercial use.
 
-## Evaluation notes
+## Add a local evidence corpus
 
-The training script reports a random stratified 80/20 split. This is a baseline, not a final benchmark: near-duplicate stories or source-specific language may inflate random-split performance. Before presenting results, add duplicate/source-aware evaluation and a held-out dataset from a different time period or source. Report macro-F1, per-class precision/recall, confusion matrix, dataset provenance, and failure examples.
+Create `data/evidence.jsonl` with one JSON object per line. Each record should include:
+- `id`: stable identifier
+- `title`: passage or article title
+- `publisher`: publisher or institution
+- `url`: direct, traceable source URL
+- `date`: publication or update date when known
+- `text`: passage text
+
+Only add material you are entitled to use. Keep source metadata accurate. The included `data/sample_evidence.jsonl` is fictional and must not be presented as real-world evidence.
+
+## Evaluation and limitations
+
+The current classifier uses a random stratified 80/20 split. That is a baseline, not proof of generalization; duplicate stories, publisher language, and topic/time-period artifacts can inflate performance. Before making benchmark claims:
+- evaluate on a held-out source, event, or time period;
+- report accuracy, macro-F1, per-class precision/recall, and the confusion matrix;
+- inspect errors and test out-of-distribution examples;
+- evaluate evidence retrieval with human-labelled relevance judgments and Recall@1, Recall@3, and Recall@5;
+- document latency, model version, data provenance, and failure cases.
+
+Live search results are candidate sources, not verified evidence. GDELT metadata and headlines can be incomplete or noisy, and retrieval similarity is not a truth score. VerityAI does not currently automatically classify evidence as supporting or contradicting a claim. The final assessment remains **Unverified** pending human review.
+
+## Project structure
+
+```text
+app.py                         Streamlit interface
+src/verityai/classifier.py     Classifier loading and inference
+src/verityai/retrieval.py      Transformer embeddings and FAISS retrieval
+scripts/train_classifier.py    Training and baseline evaluation
+data/sample_evidence.jsonl     Fictional demo corpus
+docs/evaluation.md             Evaluation protocol
+tests/test_assessment.py       Evidence-loader tests
+.github/workflows/             Training workflow
+```
+
+## Responsible use
+
+Do not use this prototype as the sole basis for consequential decisions. Verify claims using original, authoritative, current, and independent sources. Do not describe a prediction as proof or a similarity score as confidence in truth.
