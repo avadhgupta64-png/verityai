@@ -1,17 +1,16 @@
 """VerityAI: evidence discovery and experimental article classification."""
 from pathlib import Path
 import json
-from datetime import datetime
 import requests
 import streamlit as st
 
 from src.verityai.retrieval import EvidenceRetriever, load_evidence
 from src.verityai.classifier import load_classifier, classify_article
+from src.verityai.live_search import search_live_news
 
 ROOT = Path(__file__).parent
 SAMPLE_PATH = ROOT / "data" / "sample_evidence.jsonl"
 USER_PATH = ROOT / "data" / "evidence.jsonl"
-GDELT_URL = "https://api.gdeltproject.org/api/v2/doc/doc"
 
 st.set_page_config(
     page_title="VerityAI | Evidence Before Belief",
@@ -92,44 +91,6 @@ with evidence_tab:
     def get_retriever(corpus_signature: str, records_json: str):
         return EvidenceRetriever(json.loads(records_json))
 
-    def search_live_news(query: str, limit: int = 10) -> list[dict]:
-        response = requests.get(
-            GDELT_URL,
-            params={
-                "query": query,
-                "mode": "ArtList",
-                "format": "json",
-                "maxrecords": min(max(limit, 1), 25),
-                "sort": "HybridRel",
-            },
-            headers={"User-Agent": "VerityAI/1.0 (research prototype)"},
-            timeout=20,
-        )
-        response.raise_for_status()
-        payload = response.json()
-        articles = payload.get("articles", [])
-        records = []
-        for i, article in enumerate(articles):
-            article_title = str(article.get("title") or "").strip()
-            url = str(article.get("url") or "").strip()
-            if not article_title or not url or not url.startswith(("https://", "http://")):
-                continue
-            seen = str(article.get("seendate") or "")
-            try:
-                published = datetime.strptime(seen[:8], "%Y%m%d").date().isoformat()
-            except ValueError:
-                published = "Date not supplied"
-            domain = str(article.get("domain") or "Publisher not supplied")
-            records.append({
-                "id": f"gdelt-{i}",
-                "title": article_title,
-                "publisher": domain,
-                "url": url,
-                "date": published,
-                "date_label": "GDELT indexed/seen date (not necessarily publication date)",
-                "text": article_title + ". Publisher/domain: " + domain,
-            })
-        return records
 
     if st.button("Discover evidence", type="primary", disabled=not claim.strip()):
         try:
@@ -143,7 +104,7 @@ with evidence_tab:
                 else:
                     records = local_evidence
                 records_json = json.dumps(records, sort_keys=True, ensure_ascii=False)
-                signature = str(hash(records_json))
+                signature = __import__('hashlib').sha256(records_json.encode('utf-8')).hexdigest()
                 retriever = get_retriever(signature, records_json)
                 matches = retriever.search(claim.strip(), top_k=top_k)
             st.subheader("Assessment: Unverified")
