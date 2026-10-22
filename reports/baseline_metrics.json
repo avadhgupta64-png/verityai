@@ -1,0 +1,50 @@
+{
+  "dataset": "Kaggle ISOT Fake and Real News Dataset",
+  "split": "random stratified 80/20; random_state=42",
+  "train_rows": 31282,
+  "test_rows": 7821,
+  "accuracy": 0.9884925201380897,
+  "macro_f1": 0.9884019854158538,
+  "confusion_matrix_labels": [
+    "Fake",
+    "Real"
+  ],
+  "confusion_matrix": [
+    [
+      3520,
+      62
+    ],
+    [
+      28,
+      4211
+    ]
+  ],
+  "classification_report": {
+    "Fake": {
+      "precision": 0.992108229988726,
+      "recall": 0.9826912339475153,
+      "f1-score": 0.9873772791023843,
+      "support": 3582.0
+    },
+    "Real": {
+      "precision": 0.9854902878539668,
+      "recall": 0.9933946685539042,
+      "f1-score": 0.9894266917293233,
+      "support": 4239.0
+    },
+    "accuracy": 0.9884925201380897,
+    "macro avg": {
+      "precision": 0.9887992589213463,
+      "recall": 0.9880429512507098,
+      "f1-score": 0.9884019854158538,
+      "support": 7821.0
+    },
+    "weighted avg": {
+      "precision": 0.9885212901205194,
+      "recall": 0.9884925201380897,
+      "f1-score": 0.9884880654629,
+      "support": 7821.0
+    }
+  },
+  "caveat": "In-distribution benchmark only; not proof of real-world truth verification."
+}
