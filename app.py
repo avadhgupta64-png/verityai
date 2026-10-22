@@ -75,7 +75,7 @@ with st.expander("How results are assessed"):
         "- The coverage score describes word overlap with the closest retrieved passage. It is not a probability of truth."
     )
 
-classifier_tab, analysis_tab = st.tabs(["Article-pattern classifier", "Claim analysis"])
+# Streamlit tabs reset to the first tab after a rerun. Put Claim analysis first so\n# results and diagnostics remain visible after its Analyse claim button reruns the app.\nanalysis_tab, classifier_tab = st.tabs(["Claim analysis", "Article-pattern classifier"])
 
 with classifier_tab:
     st.subheader("Historical article-pattern baseline")
