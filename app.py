@@ -126,6 +126,7 @@ with evidence_tab:
                 "publisher": domain,
                 "url": url,
                 "date": published,
+                "date_label": "GDELT indexed/seen date (not necessarily publication date)",
                 "text": article_title + ". Publisher/domain: " + domain,
             })
         return records
@@ -155,7 +156,7 @@ with evidence_tab:
                     st.markdown(f"**{rank}. {item['title']}**")
                     st.caption(
                         f"{item.get('publisher', 'Unknown publisher')} · "
-                        f"{item.get('date', 'Date not supplied')} · "
+                        f"{item.get('date_label', 'Date')} {item.get('date', 'not supplied')} · "
                         f"retrieval similarity: {item['score']:.3f}"
                     )
                     if source_mode == "Local evidence corpus":
