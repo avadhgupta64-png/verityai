@@ -14,12 +14,12 @@ VerityAI is an experimental research prototype for exploring news-article patter
 - Reports the predicted dataset-style label and the model's score for that class.
 - The score is not a calibrated probability of truth. Dataset labels, publishers, topics, and historical language patterns can introduce bias.
 
-### 2. Evidence discovery
+### 2. Claim analysis and evidence discovery
 Choose one of two sources:
-- **Live news discovery (GDELT):** queries the GDELT DOC API for candidate article headlines and metadata, then ranks candidates with embeddings. It does not guarantee full-text access or assess whether a source actually supports or contradicts the claim.
+- **Atomic statement breakdown:** splits a pasted excerpt into sentence-level statements for individual review. This is a practical first pass, not a full linguistic claim extractor.\n- **Live news discovery (GDELT):** queries the GDELT DOC API for candidate article headlines and metadata, then ranks candidates with embeddings. It does not guarantee full-text access or assess whether a source actually supports or contradicts the claim.\n- **Evidence coverage and reasoning:** compares key terms with the closest retrieved passage, shows matched terms, a coverage score, a conservative status, source links, and a downloadable JSON analysis log. This transparent lexical heuristic is not natural-language inference and cannot establish truth. The app intentionally does not automatically issue a Verified status.
 - **Local evidence corpus:** retrieves passages from `data/evidence.jsonl`, if supplied. Otherwise, the app clearly identifies the included fictional demonstration corpus.
 
-The assessment intentionally remains **Unverified**. Review original pages, dates, context, source quality, independent corroboration, and conflicting reporting before drawing a conclusion.
+The overall assessment remains **Unverified**. Individual statements may receive a Potentially Misleading caution flag only when a possible negation mismatch is detected; this is not a verdict. Review original pages, dates, context, source quality, independent corroboration, and conflicting reporting before drawing a conclusion.
 
 ## Technology
 
@@ -81,7 +81,7 @@ Create `data/evidence.jsonl` with one JSON object per line. Each record should i
 
 Only add material you are entitled to use. Keep source metadata accurate. The included `data/sample_evidence.jsonl` is fictional and must not be presented as real-world evidence.
 
-## Evaluation and limitations
+## Benchmark and evaluation\n\n\`data/benchmark_15.jsonl\` contains 15 clearly marked synthetic fixtures for exercising statement splitting and evidence-review flows. They are not public-news examples, verified ground truth, or a scored accuracy benchmark. A formal benchmark still needs 15 independently checked public or synthetic claims with adjudicated expected labels and traceable sources.\n\nAutomated unit tests run on pushes and pull requests through GitHub Actions.\n\n## Evaluation and limitations
 
 The current classifier uses a random stratified 80/20 split. That is a baseline, not proof of generalization; duplicate stories, publisher language, and topic/time-period artifacts can inflate performance. Before making benchmark claims:
 - evaluate on a held-out source, event, or time period;
