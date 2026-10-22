@@ -96,10 +96,18 @@ with analysis_tab:
         return EvidenceRetriever(json.loads(records_json))
 
     if st.button("Analyse claim", type="primary", disabled=not claim.strip()):
-        facts = split_claim_into_facts(claim)
-        if not facts:
+        all_facts = split_claim_into_facts(claim)
+        if not all_facts:
             st.warning("Enter at least one factual statement.")
             st.stop()
+        max_statements = 12
+        if len(all_facts) > max_statements:
+            st.warning(
+                f"This input contains {len(all_facts)} sentence-level statements. "
+                f"To keep analysis responsive, only the first {max_statements} will be analysed. "
+                "Shorten the input or submit the remaining statements separately."
+            )
+        facts = all_facts[:max_statements]
         st.markdown("#### 1. Atomic statements")
         for number, fact in enumerate(facts, start=1):
             st.write(f"{number}. {fact}")
