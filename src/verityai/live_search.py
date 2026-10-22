@@ -5,6 +5,7 @@ Search results are candidates for human review, not verified evidence.
 from __future__ import annotations
 
 from datetime import datetime
+import re
 from typing import Any
 from urllib.parse import urlparse
 
