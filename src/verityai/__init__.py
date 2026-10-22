@@ -1,0 +1,1 @@
+"""VerityAI evidence retrieval prototype."""
