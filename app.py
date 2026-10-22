@@ -75,7 +75,7 @@ with analysis_tab:
     )
     source_choice = st.radio(
         "Where should VerityAI look?",
-        ["Live news headlines (GDELT)", "Local evidence corpus"],
+        ["Live news headlines (Google News RSS / GDELT)", "Local evidence corpus"],
         horizontal=True,
     )
     result_count = st.slider("Maximum passages per statement", 1, 5, 3)
@@ -114,7 +114,7 @@ with analysis_tab:
 
         try:
             with st.spinner("Finding relevant material for each statement…"):
-                if source_choice == "Live news headlines (GDELT)":
+                if source_choice == "Live news headlines (Google News RSS / GDELT)":
                     # Search each statement separately: a long combined paragraph
                     # often produces poor search results or no results at all.
                     live_records = []
@@ -142,16 +142,15 @@ with analysis_tab:
                             )
                         else:
                             st.error(
-                                "Live news search failed for every statement. VerityAI tried its primary "
-                                "provider (GDELT) and the Google News RSS fallback, but neither produced "
-                                "usable results. This is a provider/network failure, not a finding about "
+                                "Live news search failed for every statement. VerityAI tried Google News RSS first and "
+                                "GDELT as a fallback, but neither produced usable results. This is a "
+                                "provider/network failure, not a finding about "
                                 "whether the claim is true. No local/demo evidence was substituted."
                             )
                             with st.expander("Live-search diagnostics (provider errors)"):
                                 st.caption(
-                                    "Each line should include both the GDELT error and the Google News RSS "
-                                    "fallback error. If it mentions only GDELT, the deployed app may be "
-                                    "running an older version of live_search.py."
+                                    "Each line should include provider errors for Google News RSS and GDELT when both providers fail. "
+                                    "A provider may be skipped if the other provider returns usable results."
                                 )
                                 for failure in live_search_failures:
                                     st.code(failure)
@@ -166,7 +165,7 @@ with analysis_tab:
                         unique_records[identity] = item
                     records = list(unique_records.values())
                     if not records:
-                        st.warning("GDELT returned no candidate headlines for these statements. No local/demo evidence was substituted. Try shorter wording or switch to the local corpus.")
+                        st.warning("Neither live-news provider returned usable candidate headlines for these statements. No local/demo evidence was substituted. Try shorter wording or switch to the local corpus.")
                         st.stop()
                     st.caption(f"Found {len(records)} unique candidate headlines across {len(facts)} statement-specific searches. Headlines and metadata alone may not contain enough evidence.")
                 else:
