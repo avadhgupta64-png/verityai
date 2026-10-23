@@ -60,7 +60,7 @@ with classifier_tab:
     if st.button("Classify article", type="primary", disabled=model is None or not (headline.strip() or article.strip())):
         try:
             result = classify_article(model, headline, article)
-            st.subheader(f"Dataset-pattern prediction: {result['label']}")
+            st.subheader(f"Historical dataset pattern (not a truth verdict): {result['label']}")
             st.metric("Score for predicted class", f"{result['score']:.1%}")
             st.warning("This is not a calibrated probability that the article is true or false.")
         except (ValueError, AttributeError, TypeError) as exc:
@@ -180,9 +180,10 @@ with analysis_tab:
                 discrepancies = find_numeric_discrepancies(facts)
 
             st.markdown("#### 2. Evidence assessment")
-            st.info(
-                "Overall status: **Unverified**. The current assessment uses retrieval and transparent word-overlap signals. "
-                "It does not yet have a validated natural-language inference model or authoritative-source review."
+            st.error("## UNVERIFIED — no reliable truth verdict available")
+            st.warning(
+                "VerityAI found candidate material using search and word overlap, but it does not yet determine whether sources support or contradict a claim. "
+                "A related headline is not proof. Treat every claim as UNVERIFIED until you manually confirm it against reliable original sources."
             )
             st.caption("Evidence coverage score is based on shared terms with a sufficiently relevant passage. It is not a truth probability or calibrated confidence score.")
             if discrepancies:
