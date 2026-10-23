@@ -60,9 +60,9 @@ with classifier_tab:
     if st.button("Classify article", type="primary", disabled=model is None or not (headline.strip() or article.strip())):
         try:
             result = classify_article(model, headline, article)
-            st.subheader(f"Dataset-pattern prediction: {result['label']}")
-            st.metric("Score for predicted class", f"{result['score']:.1%}")
-            st.warning("This is not a calibrated probability that the article is true or false.")
+            st.subheader(f"Historical model pattern: {result['label']}")
+            st.metric("Model score for this class", f"{result['score']:.1%}")
+            st.warning("This model learned patterns in an older Kaggle dataset. It does not check the publisher, article date, cited evidence, or current events. Treat this as an experimental signal only; a high score does not establish that the article is fake or real.")
         except (ValueError, AttributeError, TypeError) as exc:
             st.error(f"Could not classify this input: {exc}")
 
@@ -188,8 +188,8 @@ with analysis_tab:
 
             st.markdown("#### 2. Evidence assessment")
             st.info(
-                "Overall status: **Unverified**. The current assessment uses retrieval and transparent word-overlap signals. "
-                "It does not yet have a validated natural-language inference model or authoritative-source review."
+                "**No automatic truth verdict issued.** The statuses below describe whether the app found a potentially relevant source, "
+                "not whether the claim is true or false. The current system does not yet perform reliable support/contradiction analysis."
             )
             st.caption("Evidence coverage score is based on shared terms with a sufficiently relevant passage. It is not a truth probability or calibrated confidence score.")
             if discrepancies:
@@ -226,10 +226,10 @@ with analysis_tab:
             log = {
                 "claim": claim,
                 "atomic_statements": facts,
-                "overall_status": "Unverified",
-                "method": "Transformer embeddings + FAISS retrieval + lexical relevance heuristic",
+                "overall_status": "No automatic truth verdict issued",
+                "method": "Transformer embeddings + FAISS retrieval + lexical source-relevance heuristic; no truth verdict",
                 "limitations": [
-                    "No automatic truth determination",
+                    "No automatic truth determination or entailment/contradiction model",
                     "GDELT mode searches each statement separately and returns headlines/metadata, not full article content",
                     "Weak lexical matches are omitted as source matches",
                     "Different percentages may be flagged for human review but are not automatically treated as contradictions",
