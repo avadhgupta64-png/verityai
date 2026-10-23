@@ -69,7 +69,7 @@ def test_empty_claim_has_no_facts():
 
 def test_assessment_abstains_when_no_evidence_exists():
     result = assess_facts(["The city opened three clinics."], [])
-    assert result[0]["status"] == "Unverified"
+    assert result[0]["status"] == "Insufficient evidence found"
     assert result[0]["source"] is None
 
 
@@ -78,7 +78,7 @@ def test_assessment_does_not_attach_irrelevant_source():
         ["The council planted 500 trees in 2025."],
         [{"id": "1", "title": "School garden report", "text": "The garden contains twelve planter boxes."}],
     )
-    assert result[0]["status"] == "Unverified"
+    assert result[0]["status"] == "Insufficient evidence found"
     assert result[0]["source"] is None
     assert result[0]["coverage_score"] == 0
     assert "No sufficiently relevant passage" in result[0]["reason"]
@@ -163,3 +163,20 @@ def test_claim_splitter_does_not_silently_drop_statements_over_twelve():
     facts = split_claim_into_facts(claim)
     assert len(facts) == 14
     assert facts[-1] == "Statement number 14."
+
+
+
+def test_assessment_reports_relevant_candidate_without_claiming_it_is_true():
+    result = assess_facts(
+        ["Hindustan Times reports Delhi opened three new clinics."],
+        [{
+            "id": "1",
+            "title": "Hindustan Times: Delhi opened three new clinics",
+            "text": "Hindustan Times reports Delhi opened three new clinics.",
+            "publisher": "Hindustan Times",
+            "url": "https://www.hindustantimes.com/example"
+        }],
+    )
+    assert result[0]["status"] == "Relevant source found — review needed"
+    assert result[0]["source"]["publisher"] == "Hindustan Times"
+    assert "does not show" in result[0]["reason"]
