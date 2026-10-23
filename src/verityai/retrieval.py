@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import faiss
 import numpy as np
@@ -19,14 +20,40 @@ DEFAULT_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 def load_evidence(path: str | Path) -> list[dict[str, Any]]:
     """Load JSONL evidence records and validate required fields."""
     records: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
     with Path(path).open("r", encoding="utf-8") as handle:
         for line_number, line in enumerate(handle, start=1):
             if not line.strip():
                 continue
-            record = json.loads(line)
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise ValueError(
+                    f"Line {line_number}: invalid JSON ({exc.msg})."
+                ) from exc
+            if not isinstance(record, dict):
+                raise ValueError(f"Line {line_number}: each record must be a JSON object.")
             for field in ("id", "title", "text"):
                 if not isinstance(record.get(field), str) or not record[field].strip():
                     raise ValueError(f"Line {line_number}: required field {field!r} is missing.")
+            record_id = record["id"].strip()
+            if record_id in seen_ids:
+                raise ValueError(f"Line {line_number}: duplicate evidence id {record_id!r}.")
+            seen_ids.add(record_id)
+
+            url = record.get("url")
+            if url is not None and url != "":
+                if not isinstance(url, str):
+                    raise ValueError(f"Line {line_number}: field 'url' must be a string.")
+                parsed_url = urlparse(url.strip())
+                if parsed_url.scheme not in {"http", "https"} or not parsed_url.netloc:
+                    raise ValueError(
+                        f"Line {line_number}: field 'url' must be an absolute HTTP or HTTPS URL."
+                    )
+            for field in ("publisher", "date"):
+                if field in record and not isinstance(record[field], str):
+                    raise ValueError(f"Line {line_number}: field {field!r} must be a string.")
+
             records.append(record)
     if not records:
         raise ValueError("Evidence corpus is empty.")

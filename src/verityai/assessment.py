@@ -17,23 +17,23 @@ STOP_WORDS = {
 
 def split_claim_into_facts(claim: str) -> list[str]:
     """Split a paragraph into reviewable sentence-level statements."""
-    cleaned = re.sub(r"\s+", " ", (claim or "")).strip()
+    cleaned = re.sub(r"\\s+", " ", (claim or "")).strip()
     if not cleaned:
         return []
-    parts = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9“\"'])", cleaned)
-    return [part.strip(" \t\n") for part in parts if part.strip()][:12]
+    parts = re.split(r"(?<=[.!?])\\s+(?=[A-Z0-9“\"'])", cleaned)
+    return [part.strip(" \\t\\n") for part in parts if part.strip()]
 
 
 def _terms(text: str) -> set[str]:
     return {
         term.lower()
-        for term in re.findall(r"[A-Za-z][A-Za-z'-]{2,}|\d+(?:\.\d+)?", text)
+        for term in re.findall(r"[A-Za-z][A-Za-z'-]{2,}|\\d+(?:\\.\\d+)?", text)
         if term.lower() not in STOP_WORDS
     }
 
 
 def assess_facts(facts: list[str], evidence: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Rank evidence by lexical overlap and abstain on weak/ambiguous matches."""
+    """Find candidate sources and describe evidence availability, not truth."""
     assessed: list[dict[str, Any]] = []
     for fact in facts:
         fact_terms = _terms(fact)
@@ -46,19 +46,32 @@ def assess_facts(facts: list[str], evidence: list[dict[str, Any]]) -> list[dict[
         candidates.sort(key=lambda row: (row[0], row[1]), reverse=True)
         best_coverage, overlap, best, shared = candidates[0] if candidates else (0.0, 0, {}, set())
 
-        # Weak matches are not presented as relevant sources.
+        # This is relevance only. It is not entailment or contradiction detection.
         relevant = bool(candidates and best_coverage >= 0.20 and overlap >= 2)
-        enough = best_coverage >= 0.55 and overlap >= 3
+        strong_match = relevant and best_coverage >= 0.55 and overlap >= 3
         if not relevant:
-            reason = "No sufficiently relevant passage was found. The available results do not provide usable evidence for this statement."
-        elif enough:
-            reason = "This passage shares several key terms with the statement, but word overlap does not establish support. Check the original source, date, context, and source authority."
+            status = "Insufficient evidence found"
+            reason = (
+                "No sufficiently relevant candidate passage was found. This is a search/retrieval gap, "
+                "not evidence that the statement is false."
+            )
+        elif strong_match:
+            status = "Relevant source found — review needed"
+            reason = (
+                "A candidate passage shares several key terms with the statement. This does not show "
+                "that the source supports or contradicts it; open the original article and check its "
+                "full text, date, context, and source attribution."
+            )
         else:
-            reason = "Some related terms were found, but the match is too weak to establish support or contradiction. Check the original source and context."
+            status = "Possible source found — review needed"
+            reason = (
+                "Some related terms were found, but the match is weak. Inspect the original source "
+                "before deciding whether it is relevant; word overlap is not verification."
+            )
 
         assessed.append({
             "fact": fact,
-            "status": "Unverified",
+            "status": status,
             "coverage_score": round(best_coverage if relevant else 0.0, 3),
             "matched_terms": sorted(shared) if relevant else [],
             "reason": reason,
@@ -73,7 +86,7 @@ def find_numeric_discrepancies(facts: list[str]) -> list[dict[str, Any]]:
     This is a review prompt only; it cannot determine whether the figures conflict.
     """
     results: list[dict[str, Any]] = []
-    percent_pattern = re.compile(r"(\d+(?:\.\d+)?)\s*%")
+    percent_pattern = re.compile(r"(\\d+(?:\\.\\d+)?)\\s*%")
     for left_index, left in enumerate(facts):
         left_values = percent_pattern.findall(left)
         if not left_values:

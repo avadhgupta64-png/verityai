@@ -60,9 +60,9 @@ with classifier_tab:
     if st.button("Classify article", type="primary", disabled=model is None or not (headline.strip() or article.strip())):
         try:
             result = classify_article(model, headline, article)
-            st.subheader(f"Dataset-pattern prediction: {result['label']}")
-            st.metric("Score for predicted class", f"{result['score']:.1%}")
-            st.warning("This is not a calibrated probability that the article is true or false.")
+            st.subheader(f"Historical model pattern: {result['label']}")
+            st.metric("Model score for this class", f"{result['score']:.1%}")
+            st.warning("This model learned patterns in an older Kaggle dataset. It does not check the publisher, article date, cited evidence, or current events. Treat this as an experimental signal only; a high score does not establish that the article is fake or real.")
         except (ValueError, AttributeError, TypeError) as exc:
             st.error(f"Could not classify this input: {exc}")
 
@@ -75,7 +75,7 @@ with analysis_tab:
     )
     source_choice = st.radio(
         "Where should VerityAI look?",
-        ["Live news headlines (GDELT)", "Local evidence corpus"],
+        ["Live news headlines (Google News RSS / GDELT)", "Local evidence corpus"],
         horizontal=True,
     )
     result_count = st.slider("Maximum passages per statement", 1, 5, 3)
@@ -96,17 +96,25 @@ with analysis_tab:
         return EvidenceRetriever(json.loads(records_json))
 
     if st.button("Analyse claim", type="primary", disabled=not claim.strip()):
-        facts = split_claim_into_facts(claim)
-        if not facts:
+        all_facts = split_claim_into_facts(claim)
+        if not all_facts:
             st.warning("Enter at least one factual statement.")
             st.stop()
+        max_statements = 12
+        if len(all_facts) > max_statements:
+            st.warning(
+                f"This input contains {len(all_facts)} sentence-level statements. "
+                f"To keep analysis responsive, only the first {max_statements} will be analysed. "
+                "Shorten the input or submit the remaining statements separately."
+            )
+        facts = all_facts[:max_statements]
         st.markdown("#### 1. Atomic statements")
         for number, fact in enumerate(facts, start=1):
             st.write(f"{number}. {fact}")
 
         try:
             with st.spinner("Finding relevant material for each statement…"):
-                if source_choice == "Live news headlines (GDELT)":
+                if source_choice == "Live news headlines (Google News RSS / GDELT)":
                     # Search each statement separately: a long combined paragraph
                     # often produces poor search results or no results at all.
                     live_records = []
@@ -134,16 +142,15 @@ with analysis_tab:
                             )
                         else:
                             st.error(
-                                "Live news search failed for every statement. VerityAI tried its primary "
-                                "provider (GDELT) and the Google News RSS fallback, but neither produced "
-                                "usable results. This is a provider/network failure, not a finding about "
+                                "Live news search failed for every statement. VerityAI tried Google News RSS first and "
+                                "GDELT as a fallback, but neither produced usable results. This is a "
+                                "provider/network failure, not a finding about "
                                 "whether the claim is true. No local/demo evidence was substituted."
                             )
                             with st.expander("Live-search diagnostics (provider errors)"):
                                 st.caption(
-                                    "Each line should include both the GDELT error and the Google News RSS "
-                                    "fallback error. If it mentions only GDELT, the deployed app may be "
-                                    "running an older version of live_search.py."
+                                    "Each line should include provider errors for Google News RSS and GDELT when both providers fail. "
+                                    "A provider may be skipped if the other provider returns usable results."
                                 )
                                 for failure in live_search_failures:
                                     st.code(failure)
@@ -158,7 +165,7 @@ with analysis_tab:
                         unique_records[identity] = item
                     records = list(unique_records.values())
                     if not records:
-                        st.warning("GDELT returned no candidate headlines for these statements. No local/demo evidence was substituted. Try shorter wording or switch to the local corpus.")
+                        st.warning("Neither live-news provider returned usable candidate headlines for these statements. No local/demo evidence was substituted. Try shorter wording or switch to the local corpus.")
                         st.stop()
                     st.caption(f"Found {len(records)} unique candidate headlines across {len(facts)} statement-specific searches. Headlines and metadata alone may not contain enough evidence.")
                 else:
@@ -181,8 +188,8 @@ with analysis_tab:
 
             st.markdown("#### 2. Evidence assessment")
             st.info(
-                "Overall status: **Unverified**. The current assessment uses retrieval and transparent word-overlap signals. "
-                "It does not yet have a validated natural-language inference model or authoritative-source review."
+                "**No automatic truth verdict issued.** The statuses below describe whether the app found a potentially relevant source, "
+                "not whether the claim is true or false. The current system does not yet perform reliable support/contradiction analysis."
             )
             st.caption("Evidence coverage score is based on shared terms with a sufficiently relevant passage. It is not a truth probability or calibrated confidence score.")
             if discrepancies:
@@ -219,10 +226,10 @@ with analysis_tab:
             log = {
                 "claim": claim,
                 "atomic_statements": facts,
-                "overall_status": "Unverified",
-                "method": "Transformer embeddings + FAISS retrieval + lexical relevance heuristic",
+                "overall_status": "No automatic truth verdict issued",
+                "method": "Transformer embeddings + FAISS retrieval + lexical source-relevance heuristic; no truth verdict",
                 "limitations": [
-                    "No automatic truth determination",
+                    "No automatic truth determination or entailment/contradiction model",
                     "GDELT mode searches each statement separately and returns headlines/metadata, not full article content",
                     "Weak lexical matches are omitted as source matches",
                     "Different percentages may be flagged for human review but are not automatically treated as contradictions",
